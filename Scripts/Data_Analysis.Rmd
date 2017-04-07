@@ -17,6 +17,8 @@ rm(list=ls())
 library(Cardinal)
 library(VennDiagram)
 library(ggplot2)
+library(plyr)
+library(dplyr)
 dir<-"/home/maggie/Documents/Projects/maldifish/RAnalysis"
 setwd(file.path(dir,'Data'))
 load('Cardinal_Processed_Data.RData')
@@ -421,7 +423,7 @@ topLabels(hostsox.opls, n=50)
 image(hostsox.opls, model=list(ncomp=comp))
 scores<-hostsox.opls@resultData$`ncomp = 1`
 opls.scores<-data.frame(t0=scores$Oscores, t1=scores$scores, Class=scores$classes)
-ggplot(opls.scores, aes(x=C1, y=t0.C1, color=Class)) + geom_point() + xlab('t[1]') + ylab('t[0]')
+#ggplot(opls.scores, aes(x=C1, y=t0.C1, color=Class)) + geom_point() + xlab('t[1]') + ylab('t[0]')
 ```
 
 Not a predtive model with OPLS (no t-orthoganal scores calculated )
@@ -464,7 +466,7 @@ topLabels(moxsox.opls, n=50)
 image(moxsox.opls, model=list(ncomp=comp))
 scores<-moxsox.opls@resultData$`ncomp = 1`
 opls.scores<-data.frame(t0=scores$Oscores, t1=scores$scores, Class=scores$classes)
-ggplot(opls.scores, aes(x=C1, y=t0.C1, color=Class)) + geom_point() + xlab('t[1]') + ylab('t[0]')
+#ggplot(opls.scores, aes(x=C1, y=t0.C1, color=Class)) + geom_point() + xlab('t[1]') + ylab('t[0]')
 ```
 Also not a preditive model -- no t-orthoganol scores 
 
@@ -562,7 +564,7 @@ image(opls, model=list(ncomp=comp))
 
 scores<-opls@resultData$`ncomp = 1`
 opls.scores<-data.frame(t0=scores$Oscores, t1=scores$scores, Class=scores$classes)
-ggplot(opls.scores, aes(x=C1, y=t0.C1, color=Class)) + geom_point() + xlab('t[1]') + ylab('t[0]')
+#ggplot(opls.scores, aes(x=C1, y=t0.C1, color=Class)) + geom_point() + xlab('t[1]') + ylab('t[0]')
 ```
 
 
@@ -595,7 +597,7 @@ image(opls, model=list(ncomp=comp))
 
 scores<-opls@resultData$`ncomp = 1`
 opls.scores<-data.frame(t0=scores$Oscores, t1=scores$scores, Class=scores$classes)
-ggplot(opls.scores, aes(x=C1, y=t0.C1, color=Class)) + geom_point() + xlab('t[1]') + ylab('t[0]')
+#ggplot(opls.scores, aes(x=C1, y=t0.C1, color=Class)) + geom_point() + xlab('t[1]') + ylab('t[0]')
 ```
 
 # Ion Distrubtion Plots 
