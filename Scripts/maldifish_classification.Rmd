@@ -1,5 +1,5 @@
 ---
-title: "ClassificationAnalysis"
+title: "Classification Analysis"
 output: html_notebook
 ---
 
@@ -129,6 +129,7 @@ plot(summary(msidata.subset.ce.cv))
 
 ```{r}
 comp<-1
+set.seed(1)
 opls<-OPLS(x=msidata.subset.ce,y=as.factor(msidata.subset.ce$Class), ncomp=comp)
 summary(opls)
 ```
@@ -146,10 +147,8 @@ colnames(opls.scores)<-c('Classes', 'T1', 'TO')
 
 ## Plot components 1 vs. the predictive component --35
 ggplot(opls.scores, aes(x=T1, y=TO, color=Classes)) + geom_point() + xlab('t[1]') + ylab('t[o]') + scale_color_manual(values=c('Purple','Green','Red','Cyan'))
-
-## Make S-plot
-
 ```
+
 Plot top ion distributions of compounds describing each class
 ```{r, include=FALSE}
 TopIons <- function(dataset, results,n=3){
@@ -174,7 +173,7 @@ TopIons(maldifishmz,opls, n=9) ## using self-defined function
 Remove ciliated edge tissues and compare only Tissue and Mox signals 
 
 ```{r}
-msidata.subset.hm<-msidata.subset[,which(msidata.subset$Class %in% c('Green','Red'))]
+msidata.subset.hm<-msidata.subset[,which(msidata.subset$Class %in% c('Tissue','Red'))]
 table(msidata.subset.hm$Class)
 ```
 ```{r, message=FALSE, warning=FALSE}
@@ -193,24 +192,48 @@ Model results aren't significant (neither are the other comparisons)
 One possibility: Preform random forest classification method on data to see if we can seperate host from mox. 
 
 ```{r}
-df<-spectra(msidata.subset.hm)[,]
-rownames(df)<-msidata.subset.hm@imageData@dimnames[[1]] ## gets rownames
-colnames(df)<-msidata.subset.hm@imageData@dimnames[[2]]
+## Run random corest on one fold 
+msidata.subset.cv<-msidata.subset[,msidata.subset.hm$CV %in% c(4, 6)]
+table(msidata.subset.cv$Class)
+df<-spectra(msidata.subset.cv)[,]
+rownames(df)<-msidata.subset.cv@imageData@dimnames[[1]] ## gets rownames
+colnames(df)<-msidata.subset.cv@imageData@dimnames[[2]]
 df.t<-as.data.frame(t(df))
-int_matrix<-data.frame(Class=msidata.subset.hm$Class,df.t)
+int_matrix<-data.frame(Class=msidata.subset.cv$Class,df.t)
 
 Y<-int_matrix$Class
 X<-df.t
-forest<-randomForest(x = X, y=Y)
+forest<-randomForest(x = X, y=Y, ntree = 1000)
 forest
 ```
 
+We are pretty good are predicting the ciliated edge (error rate of 3%) and of the Sox tissues (which I am assuming is a collective symbiont group)
+
+Now if we combine the symbionts and call them symbionts can random forest predict us our categories?
+```{r}
+## Run random corest on one fold 
+msidata.subset.cv<-msidata.subset[,msidata.subset.hm$CV %in% c(4, 6)]
+table(msidata.subset.cv$Class)
+msidata.subset.cv$Class[msidata.subset.cv$Class %in% c('Green','Red')]<-'Symbiont'
+
+df<-spectra(msidata.subset.cv)[,]
+rownames(df)<-msidata.subset.cv@imageData@dimnames[[1]] ## gets rownames
+colnames(df)<-msidata.subset.cv@imageData@dimnames[[2]]
+df.t<-as.data.frame(t(df))
+int_matrix<-data.frame(Class=msidata.subset.cv$Class,df.t)
+
+Y<-int_matrix$Class
+X<-df.t
+forest<-randomForest(x = X, y=Y, ntree = 1000)
+forest
+```
+So we can predict the ciliated edge
+
+We can predict the symbiont 
+
+But the tissue is also predicted as the symbiont :( --> I am guessing the signal of the tissue is just too much like the symbiont. One other thing I would like to try again is to use the classification analysis but use the dapi-signal as a predictor because then we would really know if the tissue is tissue and not symbiont (or symbiont digestion???).
 
 
 
 
-
-
-
-
-
+## END

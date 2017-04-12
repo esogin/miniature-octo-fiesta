@@ -18,7 +18,7 @@ load('Cardinal_Processed_Data.RData')
 maldifishmz_3grps<-maldifishmz[,maldifishmz$Class %in% c('Tissue','Red','Green')]
 
 ## Add in crossvalidation group
-maldifishmz_3grps$cvgroup<-cut(maldifishmz_3grps$y, breaks=10, labels = F) #based on y-location value in dataset
+maldifishmz_3grps$cvgroup<-cut(maldifishmz_3grps$y, breaks=6, labels = F) #based on y-location value in dataset
 
 ## Generate Clusters with K-Means spatial clustering algrithm 
 
@@ -31,15 +31,26 @@ save(list=c('skmg','skma'), file='unsupervised-clustering-analysis.RData')
 
 
 ## Do Spatial shrunken centriods clustering method
-
-ssc.a<-spatialShrunkenCentroids(maldifishmz_3grps,r=c(1,2),k=c(10,15,20),s=c(0,5,10,15),method='adaptive')
+ssc.a<-spatialShrunkenCentroids(maldifishmz_3grps,r=c(1,2),k=c(15,20),s=c(0,3,6,9,15,20),method='adaptive')
 save(list=c('ssc.a'), file='ssc-adaptive-unsupervised-clustering-analysis.RData')
 
-## Supervised
-ssca.cv<-cvApply(maldifishmz_3grps, .y=maldifishmz_3grps$Class, .fun="spatialShrunkenCentroids",method='adaptive', .fold=cvgroup, r=c(1,2),s=c(0,3,5,10,15))
+##--------------------------------------------------------------------------------------------------
+## Supervised Clustering Method 
+
+
+## Add in Ciliated Edge Group for supervised analysis 
+grps<-skma$cluster$`r = 2, k = 7`
+ciliatedgrps<-grps[which(grps==1)]
+grp1<-names(ciliatedgrps)
+msidata<-maldifishmz_3grps
+pData(msidata)[rownames(pData(msidata)) %in% grp1,'Class']<-'CiliatedEdge'
+
+table(msidata$Class, msidata$cvgroup)
+
+ssca.cv<-cvApply(msidata, .y=msidata$Class, .fun="spatialShrunkenCentroids",method='adaptive', .fold=cvgroup, r=c(1,2,3),s=c(0, 4, 8, 12, 16, 20, 24, 28))
 
 setwd(file.path(dir,'Results'))
-save(list=c('ssca.cv'), file='supervised-clustering-anlaysis.RData')
+save(list=c('ssca.cv', 'msidata'), file='supervised-clustering-anlaysis.RData')
 
 ## transfer files to local machine
 
