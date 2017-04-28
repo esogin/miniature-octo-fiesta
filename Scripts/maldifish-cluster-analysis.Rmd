@@ -1,0 +1,120 @@
+---
+title: "Clustering Analysis"
+output: html_notebook
+---
+
+# Clustering Analysis with Cardinal
+
+This analysis was preformed using a dataset without slide background information and done with a datamatrix of XXX Peaks by XXX Pixels. The tissue, sox and mox channels were determined through microscopy techniques and dimenions were reduced to match the maldi-msi dataset (done by Benedikt). Please see data processing and peak picking scripts to see how data dimensions were reduced. See data clustering script to determine how clusters were generated.
+
+Set up working space
+
+```{r}
+rm(list=ls())
+library(Cardinal)
+library(ggplot2)
+library(reshape2)
+load('../Results/cluster-analysis-final.RData') ##ssc clustering 
+```
+
+### Shrunken Centriods Clustering 
+
+From the cardinal workflows document: 
+
+"The spatial shrunken centroids clustering method for statistical analysis we introduce in Cardinal in the spatialShrunkenCentroids method. 
+
+The Gaussian and adaptive weights are retained from the spatially-aware k-means clustering [3]. In addition, we introduce statistical regularization as in nearest shrunken centroids to enforce feature sparsity [4]. This means doing feature selection, so that the analysis automatically identifies informative m/z values."
+
+
+```{r}
+plot(summary(ssc.a))
+```
+
+
+
+```{r}
+mod<-list(r=1, k=15, s=15) ## list the best model 
+mycol<-c('midnightblue', 'mediumturquoise','dodgerblue', 'firebrick1','gold','seagreen4', 'plum', 'mediumvioletred', 'indianred4', 'hotpink', 'darkslategray1', 'forestgreen','olivedrab1', 'skyblue','dodgerblue4','mediumspringgreen','coral1', 'cyan','azure','cadetblue4')
+image(ssc.a, model=mod, col=mycol)
+```
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+summaryPlots <- function(dataset, results, model, segment, name, col) {
+image(results, model = model, key = FALSE, column = segment, main = name,
+layout = c(3, 2), col = col)
+plot(results, model = model, key = FALSE, column = segment, mode = "centers",
+main = "Shrunken mean spectrum", col = col)
+plot(results, model = model, key = FALSE, column = segment, mode = "tstatistics",
+main = "Shrunken t-statistics", col = col)
+top <- topLabels(results, n = 3, model = model, filter = list(classes = segment))
+image(dataset, mz = top$mz, contrast.enhance = "histogram")
+ }
+```
+
+```{r}
+summaryPlots(maldifishmz,ssc.a,model=mod,segment=1, name='bacteria rich region', col=mycol)
+```
+
+
+Plot percentage of FISH signals in entire dataset across clusters. This will show us which clusters the percentange of the fish groups falls
+
+```{r}
+## Get pixel data 
+pDf<-data.frame(pData(maldifishmz))
+pDf$rowname<-rownames(pDf)
+
+## Get cluster data plus coordinates
+cDf<-data.frame(Cluster=ssc.a$classes$mod)
+cDf$rowname<-rownames(cDf)
+
+## merge cluster annotations and pixel data
+df.m<-merge(pDf, cDf, by = 'rowname')
+
+## Class membership across clusters
+tab<-table(df.m$Class , df.m$Cluster)
+total<-rowSums(tab)
+tab<-data.frame(tab)
+tab$Total<-total
+tab$percent_of_group<-tab$Freq/total*100
+tab<-tab[!tab$Freq==0,]
+
+ggplot(tab, aes(x=as.factor(Var2), y=percent_of_group, fill=Var1)) + geom_bar(stat='identity', position='dodge')+ scale_fill_manual(values=c('mediumseagreen','lightcoral','skyblue')) + ggtitle('Percent of FISH Signals Across Clusters') + ylab('Percent of "FISH" Group') + xlab('Cluster Group') + guides(fill=guide_legend(title='FISH Group'))
+```
+
+
+Write a datatable for the significant ions across clusters
+
+```{r}
+tL<-topLabels(ssc.a, model=mod, n=1000)
+tL.sig<-tL[which(tL$adj.p.values < 0.05),]
+dim(tL.sig)
+table(tL.sig$classes)
+write.csv(tL.sig, file='../Results/ssc-ions-clusterassignment.csv')
+```
+
+
+
+### Supervised Shrunken Centriods Clustering 
+
+Creat a cross valiadation group
+```{r}
+maldifishmz$cvgroup<-cut(maldifishmzs$y, breaks=6, labels = F) #based on y-location value in dataset
+```
+
+
+Add in cilliated edge pixels 
+
+```{r}
+grps<-ssc.a$cluster$`r = 2, k = 7`
+ciliatedgrps<-grps[which(grps==1)]
+grp1<-names(ciliatedgrps)
+msidata<-maldifishmz
+pData(msidata)[rownames(pData(msidata)) %in% grp1,'Class']<-'CiliatedEdge'
+table(msidata$Class, msidata$cvgroup)
+```
+
+Run spatial shrunken centriods supervised clustering using the adaptive method and the associated parameters
+
+```{r}
+ssca.cv<-cvApply(msidata, .y=msidata$Class, .fun="spatialShrunkenCentroids",method='adaptive', .fold=cvgroup, r=c(1,2),s=c(0,3,6,12,24))
+```

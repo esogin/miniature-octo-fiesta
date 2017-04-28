@@ -40,7 +40,7 @@ int_matrix<-data.frame(Class=maldifishmz$Class,df)
 
 
 setwd(file.path(dir,'Results'))
-#save(list=c('maldifishmz','peaks_in_data','int_matrix','df'),file='Cardinal_Processed_Data.RData')
+save(list=c('maldifishmz','peaks_in_data','int_matrix','df'),file='Cardinal_Processed_Data.RData')
 #save(list=c('maldifishmz','peaks_in_data','int_matrix','df'),file='Cardinal_Processed_Data_withbkg.RData')
 
 

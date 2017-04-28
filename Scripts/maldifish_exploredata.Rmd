@@ -14,109 +14,67 @@ library(VennDiagram)
 library(ggplot2)
 library(gplots)
 library(gridExtra)
-load('../Data/Cardinal_Processed_Data_withbkg.RData')
+load('../Data/Cardinal_Processed_Data.RData')
 ```
+
 
 # Fish binning of metabolomes
 
+
 ```{r}
-ls()
 table(int_matrix$Class)
 ```
 
 Need to create lists of peaks that are in each channel. To be considered in channel, the mz value must of a mean intensity across the group of at least 10 
 This threshold should be considered throughoughly 
 
-mox channel 
 ```{r}
 trsh=10
 
-# mox
-channel<-'Red'
-df<-int_matrix[which(int_matrix$Class==channel),]
-mz.means<-colMeans(df[,sapply(df,is.numeric)])
-range(mz.means)
-summary(mz.means)
-
-mox<-names(mz.means[which(mz.means > trsh)])
-length(mox)
-```
-
-sox channel 
-```{r}
-#sox
-channel<-'Green'
-df<-int_matrix[which(int_matrix$Class==channel),]
-mz.means<-colMeans(df[,sapply(df,is.numeric)])
-range(mz.means)
-summary(mz.means)
-
-sox<-names(mz.means[which(mz.means > trsh)])
-length(sox)
-```
-
-host channel 
-```{r}
-#Host
+# Tissue
 channel<-'Tissue'
 df<-int_matrix[which(int_matrix$Class==channel),]
 mz.means<-colMeans(df[,sapply(df,is.numeric)])
-range(mz.means)
 summary(mz.means)
+Tissue<-names(mz.means[which(mz.means > trsh)])
 
-host<-names(mz.means[which(mz.means > trsh)])
-length(host)
-```
-
-Mixed 
-```{r}
-#Mixed
-channel<-'Mixed'
+# Mox
+channel<-'Red'
 df<-int_matrix[which(int_matrix$Class==channel),]
 mz.means<-colMeans(df[,sapply(df,is.numeric)])
-range(mz.means)
 summary(mz.means)
+Mox<-names(mz.means[which(mz.means > trsh)])
 
-soxmox<-names(mz.means[which(mz.means > trsh)])
-length(soxmox)
-```
-
-Background
-```{r}
-channel<-'Background'
+# Sox
+channel<-'Green'
 df<-int_matrix[which(int_matrix$Class==channel),]
 mz.means<-colMeans(df[,sapply(df,is.numeric)])
-range(mz.means)
 summary(mz.means)
+Sox<-names(mz.means[which(mz.means > trsh)])
 
-bkg<-names(mz.means[which(mz.means > trsh)])
-length(bkg)
-```
-Compare through venn-diagram
-
-```{r}
-venn<-venn.diagram(x = list(mox,sox,host,soxmox, bkg), category.names = c('Mox','Sox','Host','Sox/Mox','Background'),filename = NULL, fill=c('Red','Green','Blue','Yellow', 'Gray'))
-grid.arrange(gTree(children=venn), ncol=1)
-
-venn<-venn.diagram(x = list(mox,sox,host), category.names = c('Mox','Sox','Host'),filename = NULL, fill=c('Red','Green','Blue'))
-grid.arrange(gTree(children=venn), ncol=1)
+chns<-list(Tissue, Mox, Sox)
 ```
 
-Determine which features are unique between channels from first venn diagram showing all 4 types of channels (this can easily be changed but I figure more info the better???)
+Compare through venn-diagrams
 
 ```{r}
-metlist<-list(mox, sox, host, soxmox, bkg)
-names(metlist)<-c('mox','sox','host','soxmox', 'background')
+venn.diagram(x = chns, category.names = c('Host','Mox','Sox'),filename = '../Results/FishBinned_Metabolome.eps', fill=c('skyblue', 'lightcoral','mediumseagreen'))
+venn<-venn.diagram(x = chns, category.names = c('Host','Mox','Sox'),filename = NULL, fill=c('skyblue', 'lightcoral','mediumseagreen'))
+grid.arrange(gTree(children=venn), ncol=1,newpage = T)
+```
+
+Determine which features are unique between channels 
+
+```{r}
+metlist<-chns
+names(metlist)<-c('Tissue', 'Mox', 'Sox')
 a<-venn(metlist, show.plot=F)
 inters <- attr(a,"intersections")
-
-m<-data.frame(mz=inters$mox, label='mox')
-s<-data.frame(mz=inters$sox, label='sox')
-h<-data.frame(mz=inters$host, label='host')
-c<-data.frame(mz=inters$`mox:sox:host:soxmox:background`, label='common')
-b<-data.frame(mz=inters$background, label='background')
-sm<-data.frame(mz=inters$soxmox, label='soxmox')
-vlists<-rbind(m,s,h,c,sm,b)
+m<-data.frame(mz=inters$Mox, label='mox')
+s<-data.frame(mz=inters$Sox, label='sox')
+h<-data.frame(mz=inters$Tissue, label='host')
+c<-data.frame(mz=inters$`Tissue:Mox:Sox`, label='common')
+vlists<-rbind(m,s,h,c)
 write.csv(vlists, file='../Results/VennDiagram-Seperated-Ion-List.csv')
 ```
 
@@ -125,19 +83,23 @@ write.csv(vlists, file='../Results/VennDiagram-Seperated-Ion-List.csv')
 Runs a PCA model on entire dataset with 4 components 
 ```{r}
 set.seed(seed = 1)
-pca.mod<-PCA(maldifishmz,ncomp=3)
+pca.mod<-PCA(maldifishmz,ncomp=2)
 summary(pca.mod)
 plot(summary(pca.mod))
 ```
 
 
-
 Visualize PCA analysis 
 
 ```{r}
-mycols<-gradient.colors(10,start='darkblue', end='coral')
-image(pca.mod, column=c('PC1','PC2','PC3'), superpose=T, col.regions=mycols)
+mycols<-gradient.colors(10,start='royalblue', end='goldenrod')
+#postscript('../Results/PCA.eps', height=12, width=18)
+par(mfrow=c(1,2))
+image(pca.mod, column=c('PC1','PC2'), superpose=F, col.regions=mycols)
+#dev.off()
 ```
+
+
 We can see clear seperation in the data based on PC components 1 and 2. Plot in scatter plot and color according to class category
 
 ```{r}
@@ -145,74 +107,17 @@ We can see clear seperation in the data based on PC components 1 and 2. Plot in 
 pca.scores.red<-as.data.frame(pca.mod[[1]]$scores[maldifishmz$Class=='Red',])
 pca.scores.red$Class<-'mox'
 
-pca.scores.green<-as.data.frame(pca.mod[[1]]$scores[maldifishmz$Class=='Green',],Class='sox')
+pca.scores.green<-as.data.frame(pca.mod[[1]]$scores[maldifishmz$Class=='Green',])
 pca.scores.green$Class<-'sox'
 
-pca.scores.tissue<-as.data.frame(pca.mod[[1]]$scores[maldifishmz$Class=='Tissue',],Class='host')
+pca.scores.tissue<-as.data.frame(pca.mod[[1]]$scores[maldifishmz$Class=='Tissue',])
 pca.scores.tissue$Class<-'host'
 
-pca.scores.mixed<-as.data.frame(pca.mod[[1]]$scores[maldifishmz$Class=='Mixed',],Class='mixed')
-pca.scores.mixed$Class<-'sox&mox'
+pca.scores<-rbind(pca.scores.green,pca.scores.red,pca.scores.tissue)
+pca.scores.symbionts<-pca.scores[pca.scores$Class %in% c('mox','sox'),]
 
-pca.scores.bkg<-as.data.frame(pca.mod[[1]]$scores[maldifishmz$Class=='Background',],Class='Background')
-pca.scores.bkg$Class<-'background'
-
-pca.scores<-rbind(pca.scores.green,pca.scores.mixed,pca.scores.red,pca.scores.tissue,pca.scores.bkg)
-
-pca.scores.symbionts<-pca.scores[pca.scores$Class %in% c('mox','sox','mixed'),]
-ggplot(pca.scores, aes(x=PC1, y=PC2, color=Class)) + geom_point(alpha=0.5) + geom_point(data=pca.scores.symbionts,aes( x=PC1, y=PC2, color=Class))
-```
-
-
-Re-Run PCA without background pixels 
-
-
-```{r}
-msidata<-maldifishmz[,!maldifishmz$Class %in% c('Background')]
-set.seed(seed = 1)
-pca.mod<-PCA(msidata,ncomp=4)
-summary(pca.mod)
-plot(summary(pca.mod))
-```
-
-
-```{r}
-mycols<-gradient.colors(10,start='darkblue', end='coral')
-image(pca.mod, column=c('PC1','PC2','PC3'), superpose=T, col.regions=mycols)
-```
-
-With scatter plot 
-
-```{r}
-pca.scores.red<-as.data.frame(pca.mod[[1]]$scores[msidata$Class=='Red',])
-pca.scores.red$Class<-'mox'
-
-pca.scores.green<-as.data.frame(pca.mod[[1]]$scores[msidata$Class=='Green',],Class='sox')
-pca.scores.green$Class<-'sox'
-
-pca.scores.tissue<-as.data.frame(pca.mod[[1]]$scores[msidata$Class=='Tissue',],Class='host')
-pca.scores.tissue$Class<-'host'
-
-pca.scores.mixed<-as.data.frame(pca.mod[[1]]$scores[msidata$Class=='Mixed',],Class='mixed')
-pca.scores.mixed$Class<-'sox&mox'
-
-pca.scores<-rbind(pca.scores.green,pca.scores.mixed,pca.scores.red,pca.scores.tissue)
-
-pca.scores.symbionts<-pca.scores[pca.scores$Class %in% c('mox','sox','mixed'),]
-ggplot(pca.scores, aes(x=PC1, y=PC2, color=Class)) + geom_point(alpha=0.5) + geom_point(data=pca.scores.symbionts,aes( x=PC1, y=PC2, color=Class))
-```
-
-
-
-Clearly there is a large variation in the host tissue. Just to confirm, re-run PCA with just host pixels 
-
-```{r}
-msidata.host<-msidata[,msidata$Class=='Tissue']
-pca.mod.2<-PCA(msidata.host,ncomp=2)
-plot(summary(pca.mod.2))
-image(pca.mod.2, column=c('PC1','PC2'), superpose=T, col.regions=mycols)
-pca.scores.red<-as.data.frame(pca.mod.2[[1]]$scores)
-ggplot(pca.scores, aes(x=PC1, y=PC2)) + geom_point(alpha=0.5) 
+ggplot(pca.scores, aes(x=PC1, y=PC2, color=Class)) + geom_point() + geom_point(data=pca.scores.symbionts,aes( x=PC1, y=PC2, color=Class)) + theme_bw() + scale_color_manual(values=c('skyblue', 'lightcoral','mediumseagreen'))
+ggsave('../Results/PCA_scatter.eps')
 ```
 
 
