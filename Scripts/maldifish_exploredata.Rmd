@@ -37,6 +37,7 @@ df<-int_matrix[which(int_matrix$Class==channel),]
 mz.means<-colMeans(df[,sapply(df,is.numeric)])
 summary(mz.means)
 Tissue<-names(mz.means[which(mz.means > trsh)])
+tsh<-mz.means[which(mz.means > trsh)]
 
 # Mox
 channel<-'Red'
@@ -54,6 +55,27 @@ Sox<-names(mz.means[which(mz.means > trsh)])
 
 chns<-list(Tissue, Mox, Sox)
 ```
+
+
+```{r}
+par(mfrow=c(2,3))
+pdf('../Results/intensityBinning.pdf', width=10, height=10)
+tsh<-tsh[order(tsh)]
+image(maldifishmz,mz=c('501.487'), main='Mean Intensity=10')
+image(maldifishmz,mz=c('1010.089'), main='Mean Intensity=25')
+image(maldifishmz,mz=c('894.583 '), main='Mean Intensity=40')
+image(maldifishmz,mz=c('897.604 '), main='Mean Intensity=80')
+image(maldifishmz,mz=c('600.031 '), main='Mean Intensity=100')
+image(maldifishmz,mz=c('528.307 '), main='Mean Intensity=500')
+dev.off()
+
+
+plot(maldifishmz, pixel=1:ncol(maldifishmz), pixel.groups=maldifishmz$Class, superpose=T, key=T, col=c('skyblue', 'lightcoral','mediumseagreen'))
+
+
+```
+
+
 
 Compare through venn-diagrams
 
