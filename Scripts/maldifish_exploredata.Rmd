@@ -14,7 +14,7 @@ library(VennDiagram)
 library(ggplot2)
 library(gplots)
 library(gridExtra)
-load('../Data/Cardinal_Processed_Data.RData')
+load('../Results/Cardinal_Processed_Data.RData')
 ```
 
 
@@ -59,7 +59,7 @@ chns<-list(Tissue, Mox, Sox)
 
 ```{r}
 par(mfrow=c(2,3))
-pdf('../Results/intensityBinning.pdf', width=10, height=10)
+#pdf('../Results/intensityBinning.pdf', width=10, height=10)
 tsh<-tsh[order(tsh)]
 image(maldifishmz,mz=c('501.487'), main='Mean Intensity=10')
 image(maldifishmz,mz=c('1010.089'), main='Mean Intensity=25')
@@ -67,11 +67,9 @@ image(maldifishmz,mz=c('894.583 '), main='Mean Intensity=40')
 image(maldifishmz,mz=c('897.604 '), main='Mean Intensity=80')
 image(maldifishmz,mz=c('600.031 '), main='Mean Intensity=100')
 image(maldifishmz,mz=c('528.307 '), main='Mean Intensity=500')
-dev.off()
-
+#dev.off()
 
 plot(maldifishmz, pixel=1:ncol(maldifishmz), pixel.groups=maldifishmz$Class, superpose=T, key=T, col=c('skyblue', 'lightcoral','mediumseagreen'))
-
 
 ```
 
