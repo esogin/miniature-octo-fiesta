@@ -153,8 +153,7 @@ ttls<-table(df$Class) ## totals
 sigIons<-colnames(df[,grep('m.z',colnames(df))])
 
 ## make a new dataframe
-prct_of_sgnls<-data.frame()
-for(i in 1:length(sigIons)){
+okfor(i in 1:length(sigIons)){
 ind<-sigIons[i] ## select ion
 df.tmp<-data.frame(Class=df[,1],ion=df[,ind]) # create temp dataframe with ion of interest and fish calls
 rng<-range(df.tmp$ion)
@@ -179,7 +178,7 @@ barplot(height=vec, main='% of FISHed cells with ion intensity > 0 ')
 
 cols<-colorRampPalette(c('black','blue','lightblue'))
 par(mfrow=c(1,2))
-mzval<-546.489
+mzval<-546.489 # hopanoid
 image(maldifishmz_3grps,mz=mzval, col.regions=cols(50))
 temp<-prct_of_sgnls[grep(mzval,prct_of_sgnls$mz),2:4]
 vec<-as.matrix(temp)

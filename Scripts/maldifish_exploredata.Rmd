@@ -14,7 +14,7 @@ library(VennDiagram)
 library(ggplot2)
 library(gplots)
 library(gridExtra)
-load('../Results/Cardinal_Processed_Data.RData')
+load('../Data/Cardinal_Processed_Data_June2017.RData')
 ```
 
 
@@ -32,7 +32,7 @@ This threshold should be considered throughoughly
 trsh=10
 
 # Tissue
-channel<-'Tissue'
+channel<-'Host'
 df<-int_matrix[which(int_matrix$Class==channel),]
 mz.means<-colMeans(df[,sapply(df,is.numeric)])
 summary(mz.means)
@@ -40,14 +40,14 @@ Tissue<-names(mz.means[which(mz.means > trsh)])
 tsh<-mz.means[which(mz.means > trsh)]
 
 # Mox
-channel<-'Red'
+channel<-'Mox'
 df<-int_matrix[which(int_matrix$Class==channel),]
 mz.means<-colMeans(df[,sapply(df,is.numeric)])
 summary(mz.means)
 Mox<-names(mz.means[which(mz.means > trsh)])
 
 # Sox
-channel<-'Green'
+channel<-'Sox'
 df<-int_matrix[which(int_matrix$Class==channel),]
 mz.means<-colMeans(df[,sapply(df,is.numeric)])
 summary(mz.means)
@@ -72,7 +72,6 @@ image(maldifishmz,mz=c('528.307 '), main='Mean Intensity=500')
 plot(maldifishmz, pixel=1:ncol(maldifishmz), pixel.groups=maldifishmz$Class, superpose=T, key=T, col=c('skyblue', 'lightcoral','mediumseagreen'))
 
 ```
-
 
 
 Compare through venn-diagrams
@@ -124,13 +123,13 @@ We can see clear seperation in the data based on PC components 1 and 2. Plot in 
 
 ```{r}
 ## Set up data for plotting
-pca.scores.red<-as.data.frame(pca.mod[[1]]$scores[maldifishmz$Class=='Red',])
+pca.scores.red<-as.data.frame(pca.mod[[1]]$scores[maldifishmz$Class=='Mox',])
 pca.scores.red$Class<-'mox'
 
-pca.scores.green<-as.data.frame(pca.mod[[1]]$scores[maldifishmz$Class=='Green',])
+pca.scores.green<-as.data.frame(pca.mod[[1]]$scores[maldifishmz$Class=='Sox',])
 pca.scores.green$Class<-'sox'
 
-pca.scores.tissue<-as.data.frame(pca.mod[[1]]$scores[maldifishmz$Class=='Tissue',])
+pca.scores.tissue<-as.data.frame(pca.mod[[1]]$scores[maldifishmz$Class=='Host',])
 pca.scores.tissue$Class<-'host'
 
 pca.scores<-rbind(pca.scores.green,pca.scores.red,pca.scores.tissue)
@@ -142,6 +141,123 @@ ggsave('../Results/PCA_scatter.eps')
 
 
 The ciliated edge of the tissue regions looks to be metabolically different from the rest of the tissue sections. This is also supported from the clustering results presented in the Cluster analysis notebook.
+
+
+# Some more peak exploration 
+
+From previous experiments, we know that the mox signals should be linked to the hopanoids
+
+```{r}
+hops<-data.frame(Class=int_matrix$Class, hop1=int_matrix$m.z...546.489, hop2=int_matrix$m.z...546.526, hop3=int_matrix$m.z...562.483, ce=int_matrix$m.z...756.554)
+
+table(hops[hops$hop1 > 500,'Class'])/table(int_matrix$Class)
+table(hops[hops$ce > 500,'Class'])/table(int_matrix$Class)
+
+image(maldifishmz,mz=756.554)
+image(maldifishmz,mz=546.489)
+image(maldifishmz,mz=546.526)
+
+mod<-aov(hops$hop1 ~ hops$Class)
+summary(mod)
+plot(mod)
+
+meanHop1<-aggregate(hops$hop1 ~ hops$Class, FUN=mean)
+mh1<-as.vector(meanHop1$`hops$hop1`)
+class<-meanHop1$`hops$Class`
+barplot(height = mh1 , names.arg = class)
+
+
+meanHop2<-aggregate(hops$hop2 ~ hops$Class, FUN=mean)
+mh2<-as.vector(meanHop2$`hops$hop2`)
+class<-meanHop2$`hops$Class`
+barplot(height = mh2 , names.arg = class)
+
+
+meanhop3<-aggregate(hops$hop3 ~ hops$Class, FUN=mean)
+mh3<-as.vector(meanhop3$`hops$hop3`)
+class<-meanhop3$`hops$Class`
+barplot(height = mh3 , names.arg = class)
+
+meanCE<-aggregate(hops$ce ~ hops$Class, FUN=mean)
+mce<-as.vector(meanCE$`hops$ce`)
+class<-meanCE$`hops$Class`
+barplot(height = mce , names.arg = class)
+
+```
+
+
+```{r}
+head(int_matrix[,1:10])
+rmat<-data.frame(Class=int_matrix$Class, PC1=int_matrix$m.z...756.554, PC2=int_matrix$m.z...732.554, 
+                 Methan=int_matrix$m.z...773.24, hop=int_matrix$m.z...546.489)
+tots<-table(rmat$Class)
+mets<-colnames(rmat)[-1]
+
+prct_of_sgnls<-data.frame()
+for(i in 1:length(mets)){
+ind<-mets[i] ## select ion
+df.tmp<-data.frame(Class=rmat[,1],ion=rmat[,ind]) # create temp dataframe with ion of interest and fish calls
+rng<-range(df.tmp$ion)
+df.tmp<-df.tmp[df.tmp$ion > rng[2]*.1, ] # selects only pixels with values greater then 0
+prct<-table(df.tmp$Class)/tots ## calculates percent of pixels with a positive m/z value in terms of group totals 
+prct_of_sgnls<-rbind(prct_of_sgnls,data.frame(mz=ind, sox_prct=as.vector(prct[4]), mox_prct=as.vector(prct[3]),host_prct=as.vector(prct[1]))) ## makes a handy dataframe
+}
+prct_of_sgnls
+
+```
+
+
+## More Exploration with PCA
+
+```{r}
+mox_int<-int_matrix[int_matrix$Class=='Mox',]
+mpca<-prcomp(mox_int[,2:ncol(mox_int)], scale=T, center=T)
+scores<-data.frame(mpca$x[,1:3])
+plot(scores)
+
+scores$rn<-as.vector(rownames(scores))
+mox_int$rn<-as.vector(rownames(mox_int))
+
+## merge hopanoid value with PC scores
+mox_hop<-data.frame(rn=mox_int$rn, hop1=mox_int$m.z...546.489, ce=mox_int$m.z...756.554)
+sc.m<-merge(scores, mox_hop, by= 'rn')
+
+ggplot(sc.m, aes(x=PC1, y=PC2, color=hop1)) + geom_point() + scale_fill_gradient(limits=c(0,51000)) + scale_x_continuous(limits=c(-30,70)) + scale_y_continuous(limits=c(-30,50))
+
+x<-sc.m[sc.m$hop1 > 0, ]
+ggplot(x,aes(x=PC1, y=PC2, color=hop1)) + geom_point()  + scale_fill_gradient(limits=c(0,51000)) + scale_x_continuous(limits=c(-30,70)) + scale_y_continuous(limits=c(-30,50))
+
+x<-sc.m[sc.m$hop1 > 1000, ]
+ggplot(x,aes(x=PC1, y=PC2, color=hop1)) + geom_point() +  scale_fill_gradient(limits=c(0,51000)) + scale_x_continuous(limits=c(-30,70)) + scale_y_continuous(limits=c(-30,50))
+
+
+x<-sc.m[sc.m$hop1 > 5000, ] # 10% of max
+ggplot(x,aes(x=PC1, y=PC2, color=hop1)) + geom_point()+ scale_fill_gradient(limits=c(0,51000)) + scale_x_continuous(limits=c(-30,70)) + scale_y_continuous(limits=c(-30,50))
+
+
+ggplot(sc.m, aes(x=PC1, y=PC2, color=ce)) + geom_point() + scale_fill_gradient(limits=c(0,8000)) + scale_x_continuous(limits=c(-30,70)) + scale_y_continuous(limits=c(-30,50))
+
+x<-sc.m[sc.m$ce > 0, ]
+ggplot(x,aes(x=PC1, y=PC2, color=ce)) + geom_point()  + scale_fill_gradient(limits=c(0,8000)) + scale_x_continuous(limits=c(-30,70)) + scale_y_continuous(limits=c(-30,50))
+
+x<-sc.m[sc.m$ce > 100, ]
+ggplot(x,aes(x=PC1, y=PC2, color=ce)) + geom_point() +  scale_fill_gradient(limits=c(0,8000)) + scale_x_continuous(limits=c(-30,70)) + scale_y_continuous(limits=c(-30,50))
+
+x<-sc.m[sc.m$ce > 600, ] # 10% of max
+ggplot(x,aes(x=PC1, y=PC2, color=ce)) + geom_point()+ scale_fill_gradient(limits=c(0,8000)) + scale_x_continuous(limits=c(-30,70)) + scale_y_continuous(limits=c(-30,50))
+```
+
+
+Heat map of mox signals 
+
+```{r}
+x<-as.matrix(mox_int[,grep('m.z.', colnames(mox_int))]
+heatmap.2(x)
+```
+
+
+
+
 
 
 ### END Analysis 
