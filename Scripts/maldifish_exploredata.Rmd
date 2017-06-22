@@ -144,6 +144,51 @@ ggsave('../Results/PCA_scatter.eps')
 The ciliated edge of the tissue regions looks to be metabolically different from the rest of the tissue sections. This is also supported from the clustering results presented in the Cluster analysis notebook.
 
 
+## Testing For Correlations bewteen FISH-Intensity and Metabolites 
+
+```{r}
+red<-read.table('../Data/RedCh_Intensity_1-255_xycoord_233x233pix.txt')
+colnames(red)<-c('X','Y','MoxInt')
+
+range(red$MoxInt)
+red$XY<-paste('x = ',red$X, ', y = ', red$Y, sep='')
+
+newMat<-data.frame(XY=rownames(int_matrix),int_matrix)
+newMat.merge<-merge(red, newMat, by='XY')
+newMat.merge<-newMat.merge[order(newMat.merge$MoxInt),]
+
+#546.4886
+hop1<-newMat.merge$m.z...546.489
+moxInt<-newMat.merge$MoxInt
+
+hops<-data.frame(moxInt=newMat.merge$MoxInt, hop1=newMat.merge$m.z...546.489, hop2=newMat.merge$m.z...547.473, hop3=newMat.merge$m.z...562.483, CEMet=newMat.merge$m.z...482.361, hops4=newMat.merge$m.z...546.489)
+
+plot(hops$moxInt, hops$hops4)
+
+
+plot(hops$hop1, hops$hop2)
+plot(hops$hop2, hops$hop3)
+pairs(hops)
+
+
+hops.nozs<-hops[-which(hops$moxInt < 50),]
+pairs(hops.nozs)
+plot(hops.nozs$moxInt, hops.nozs$hop1)
+
+
+plot(hops$moxInt, hops$CEMet)
+
+cors<-rcorr(x = hops$moxInt, y=hops$hops4, type='spearman')
+cors$r
+cors$P
+
+plot(hops$moxInt, hops$hops4, main='Correlation (spearman rank) r= 0.2, p < 0.05', xlab='Mox Int Value', ylab='Relative Int of m.z 546.489')
+```
+
+
+
+
+
 ### END Analysis 
 
 
