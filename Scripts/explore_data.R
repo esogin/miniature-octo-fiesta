@@ -19,6 +19,54 @@ library(ggplot2)
 library(gplots)
 library(gridExtra)
 library(dplyr)
+library(ggrepel)
+
+## Extra functions
+# Multiple plot function
+#
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+  
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+  
+  numPlots = length(plots)
+  
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                     ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+  
+  if (numPlots==1) {
+    print(plots[[1]])
+    
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+    
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+      
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
 
 ## Load data
 load('Data/Cardinal_Processed_Data_June2017.RData')
@@ -129,7 +177,7 @@ df$FC<-df$mox/df$host
 ## T-test
 Groups<-c('Host', 'Mox')
 X<-int_matrix[int_matrix$Class %in% Groups,]
-ttest<-lapply(X[-1], function(x) t.test(x ~ X$Class))
+ttest<-lapply(X[-1], function(x) wilcox.test(x ~ X$Class))
 pvals<-data.frame(unlist(lapply(ttest, function(x) x$p.value)))
 colnames(pvals)<-'pvalue'
 pvals$padjust<-p.adjust(p = pvals$pvalue, method='BH')
@@ -137,17 +185,17 @@ pvals$Metabolite<-rownames(pvals)
 
 ## Combine
 df.m<-merge(pvals[,colnames(pvals) %in% c('Metabolite','padjust')], df, by='Metabolite')
-df.m$threshold <- as.factor(df.m$padjust < 0.05)
+df.m$threshold <- as.factor(df.m$padjust < 0.05 & abs(log2(df.m$FC)) > 1)
+df.m$mz<-gsub('m.z...','',df.m$Metabolite)
 
 ## Plot Volcano 
-g1 <- ggplot(data=df.m, aes(x=log2(FC), y =-log10(padjust), 
-                colour=threshold)) +
-  geom_point(size=1.75) +
+g1 <- ggplot(data=df.m, aes(x=log2(FC), y =-log10(padjust), colour=threshold)) +geom_hline(yintercept = -log10(0.05), linetype=2, color='coral')+ geom_vline(xintercept = 0, linetype=2) + 
+  geom_point(size=1.75) + geom_label_repel(data=subset(df.m, log2(df.m$FC)< -3 | log2(df.m$FC) > 1 & df.m$padjust < 0.05), aes(log2(FC), -log10(padjust),label=mz)) + 
   xlab("log2 fold change") + ylab("-log10 p-value") +
-  theme_bw() +
-  theme(legend.position="none") + ggtitle(label = 'Mox vs. Host Volcano Plot')
+  theme_bw() + scale_color_manual(values=c('gray', 'cornflowerblue')) + 
+  theme(legend.position="none") + ggtitle(label = 'Host vs. Mox Volcano Plot')
 g1
-ggsave(filename = 'Results/ExploreData_Results/Host_Mox_Volcano.eps')
+
 
 ## Mox vs. Sox
 ## Fold Change B/A
@@ -158,7 +206,7 @@ df$FC<-df$mox/df$sox
 ## T-test
 Groups<-c('Sox', 'Mox')
 X<-int_matrix[int_matrix$Class %in% Groups,]
-ttest<-lapply(X[-1], function(x) t.test(x ~ X$Class))
+ttest<-lapply(X[-1], function(x) wilcox.test(x ~ X$Class))
 pvals<-data.frame(unlist(lapply(ttest, function(x) x$p.value)))
 colnames(pvals)<-'pvalue'
 pvals$padjust<-p.adjust(p = pvals$pvalue, method='BH')
@@ -166,17 +214,18 @@ pvals$Metabolite<-rownames(pvals)
 
 ## Combine
 df.m<-merge(pvals[,colnames(pvals) %in% c('Metabolite','padjust')], df, by='Metabolite')
-df.m$threshold <- as.factor(df.m$padjust < 0.05)
+df.m$threshold <- as.factor(df.m$padjust < 0.05 & abs(log2(df.m$FC)) > 1)
+df.m$mz<-gsub('m.z...','',df.m$Metabolite)
 
-## Plot Volcano 
-g2 <- ggplot(data=df.m, aes(x=log2(FC), y =-log10(padjust), 
-                           colour=threshold)) +
-  geom_point(size=1.75) +
+## Remove Inf values because they are likley unrealistic
+df.m<-df.m[!df.m$FC==Inf,]
+
+g2 <- ggplot(data=df.m, aes(x=log2(FC), y =-log10(padjust), colour=threshold)) + geom_vline(xintercept = 0, linetype=2) + geom_hline(yintercept = -log10(0.05), linetype=2, color='coral')+ 
+  geom_point(size=1.75)+ scale_x_continuous(limits=c(-7, 7)) + geom_label_repel(data=subset(df.m, threshold==TRUE), aes(log2(FC), -log10(padjust),label=mz)) + 
   xlab("log2 fold change") + ylab("-log10 p-value") +
-  theme_bw() +
-  theme(legend.position="none") + ggtitle(label = 'Mox vs. Sox Volcano Plot')
+  theme_bw() + scale_color_manual(values=c('gray', 'cornflowerblue')) + 
+  theme(legend.position="none") + ggtitle(label = 'Sox vs. Mox Volcano Plot')
 g2
-ggsave(filename = 'Results/ExploreData_Results/Mox_Sox_Volcano.eps')
 
 ## Sox vs. Host
 ## Fold Change B/A
@@ -187,7 +236,7 @@ df$FC<-df$sox/df$host
 ## T-test
 Groups<-c('Sox', 'Host')
 X<-int_matrix[int_matrix$Class %in% Groups,]
-ttest<-lapply(X[-1], function(x) t.test(x ~ X$Class))
+ttest<-lapply(X[-1], function(x) wilcox.test(x ~ X$Class))
 pvals<-data.frame(unlist(lapply(ttest, function(x) x$p.value)))
 colnames(pvals)<-'pvalue'
 pvals$padjust<-p.adjust(p = pvals$pvalue, method='BH')
@@ -195,17 +244,22 @@ pvals$Metabolite<-rownames(pvals)
 
 ## Combine
 df.m<-merge(pvals[,colnames(pvals) %in% c('Metabolite','padjust')], df, by='Metabolite')
-df.m$threshold <- as.factor(df.m$padjust < 0.05)
+df.m$threshold <- as.factor(df.m$padjust < 0.05 & abs(log2(df.m$FC)) > 1)
+df.m$mz<-gsub('m.z...','',df.m$Metabolite)
 
-## Plot Volcano 
-g3 <- ggplot(data=df.m, aes(x=log2(FC), y =-log10(padjust), 
-                            colour=threshold)) +
-  geom_point(size=1.75) +
-  xlab("log2 fold change") + ylab("-log10 p-value") +
-  theme_bw() +
-  theme(legend.position="none") + ggtitle(label = 'Host vs. Sox Volcano Plot') 
+## Remove Inf values because they are likley unrealistic
+df.m<-df.m[!df.m$FC==0,]
+
+g3 <- ggplot(data=df.m, aes(x=log2(FC), y =-log10(padjust), colour=threshold)) + geom_vline(xintercept = 0, linetype=2) + geom_hline(yintercept = -log10(0.05), linetype=2, color='coral')+ 
+  geom_point(size=1.75)+ scale_x_continuous(limits=c(-7, 7)) + 
+  xlab("log2 fold change") + ylab("-log10 p-value") + 
+  geom_label_repel(data=subset(df.m, log2(df.m$FC)< -4| log2(df.m$FC) > 1 & df.m$padjust < 0.05), aes(log2(FC), -log10(padjust),label=mz)) +
+  theme_bw() + scale_color_manual(values=c('gray', 'cornflowerblue')) + 
+  theme(legend.position="none") + ggtitle(label = 'Host vs. Sox Volcano Plot')
 g3
-ggsave(filename = 'Results/ExploreData_Results/Host_Sox_Volcano.eps')
+
+multiplot(g1,g2,g3, cols=3)
+
 
 
 ##-------------------------------------------------------
