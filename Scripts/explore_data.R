@@ -253,7 +253,7 @@ df.m<-df.m[!df.m$FC==0,]
 g3 <- ggplot(data=df.m, aes(x=log2(FC), y =-log10(padjust), colour=threshold)) + geom_vline(xintercept = 0, linetype=2) + geom_hline(yintercept = -log10(0.05), linetype=2, color='coral')+ 
   geom_point(size=1.75)+ scale_x_continuous(limits=c(-7, 7)) + 
   xlab("log2 fold change") + ylab("-log10 p-value") + 
-  geom_label_repel(data=subset(df.m, log2(df.m$FC)< -4| log2(df.m$FC) > 1 & df.m$padjust < 0.05), aes(log2(FC), -log10(padjust),label=mz)) +
+  geom_label_repel(data=subset(df.m, log2(df.m$FC)< -4| log2(df.m$FC) > 2 & df.m$padjust < 0.05), aes(log2(FC), -log10(padjust),label=mz)) +
   theme_bw() + scale_color_manual(values=c('gray', 'cornflowerblue')) + 
   theme(legend.position="none") + ggtitle(label = 'Host vs. Sox Volcano Plot')
 g3
