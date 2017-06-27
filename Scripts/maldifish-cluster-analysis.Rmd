@@ -132,7 +132,6 @@ Not that many pixels in cluster 8
 Make similar % cluster identity barplot for ions that are  of interest (i.e., significnat in seperating the groups)
 
 ```{r}
-
 ## select signficant ions  
 #tmp<-maldifishmz_3grps[mz(maldifishmz_3grps) %in% unique(tL.sig$mz),]
 tmp<-maldifishmz_3grps

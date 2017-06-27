@@ -292,24 +292,50 @@ plot(summary(ssc.a))
 summary(ssc.a)
 
 # All models converge on approximately 9-10 clusters describing the data-set. In order to retain as much information as possible, the model with r=1, k=20 and s=18 will be kept for down stream analysis. 
-mod<-list(r=1, k=20, s=18) ## Choose a model -- 10 groups, 124 features 
+mod<-list(r=1, k=10, s=12) ## Choose a model -- 10 groups, 124 features 
 
-mycol<-c('olivedrab3', 'mediumslateblue','lightblue','coral4','darkslategray','mediumseagreen','darkgoldenrod','gray25','mediumblue','deeppink',rep('gray',10))
+mycol<-c('olivedrab3', 'mediumslateblue','lightblue','coral4','darkslategray','mediumseagreen','darkgoldenrod','gray25','mediumblue',rep('gray',11))
 image(ssc.a, model=mod, col=mycol,strip=F)
 
 ## Plot clusters independently 
 pdf('Cluster-Distribution-Plots.pdf', height=6, width=11)
-for (i in 1:10){
+for (i in 1:9){
   summaryPlots(maldifishmz,ssc.a,model=mod,segment=i, name='', col=mycol)
 }
 dev.off()
 
 ##_______________   Relate to FISH Data  _________________________
+## Get pixel data 
+pDf<-data.frame(pData(maldifishmz))
+pDf$rowname<-rownames(pDf)
+
+## Get cluster data plus coordinates
+cDf<-data.frame(Cluster=ssc.a$classes$`r = 1, k = 10, s = 12`)
+cDf$rowname<-rownames(cDf)
+
+## merge cluster annotations and pixel data
+df.m<-merge(pDf, cDf, by = 'rowname')
+
+## Call all Red and Green annotations symbionts
+df.m[df.m$Class %in% c('Mox','Sox','Mixed'),'Class']<-'Symbiont'
+
+## Class membership across clusters
+tab<-table(df.m$Class , df.m$Cluster)
+total<-rowSums(tab)
+tab<-data.frame(tab)
+tab$Total<-total
+tab$percent_of_group<-tab$Freq/total*100
+tab<-tab[!tab$Freq==0,]
+
+ggplot(tab, aes(x=as.factor(Var2), y=percent_of_group, fill=Var1)) + geom_bar(stat='identity', position='dodge')+ scale_fill_manual(values=c('gray80','black')) + ggtitle('% of all symbiont or host tissue identification signals across clusters') + ylab('% of  "FISH" Group') + xlab('Cluster Group') + guides(fill=guide_legend(title='FISH signal')) + theme_bw()
+##ggsave('../Results/Cluster Membership.eps')
+
+
 
 ## _______________  Get Important Ions   _________________________
 
 ##_______________ Dendrogram of Clusters _________________________
-modResults<-ssc.a@resultData$`r = 1, k = 20, s = 18`
+modResults<-ssc.a@resultData$`r = 2, k = 15, s = 18`
 
 ## Add in cluster group to spectra information 
 maldifishmz$SSCA_Clusters_pixeln<-names(modResults$classes)
