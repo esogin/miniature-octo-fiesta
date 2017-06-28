@@ -7,8 +7,6 @@
 ## Need: (1) Decision on threshold for metabolome binning, how to decide what is noise and what is signal (mean column intensities per group, range is typically from very low to very high, median values aroun 8, mean values around 100)
 
 
-
-
 ##-------------------------------------------------------
 ## Set up working space
 rm(list=ls())
@@ -21,13 +19,16 @@ library(dplyr)
 library(ggrepel)
 library(ggdendro)
 
+dir<-'/Users/esogin/Documents/Projects/maldifish/RAnalysis/'
 
 ## Import Data
+setwd(file.path(dir))
 load('Data/Cardinal_Processed_Data_June2017.RData')
 load('Results/cluster-analysis-final.RData')
 ls()
 maldifishmz ## Dimensions: 2322 peaks by 17,273 pixels
 
+setwd(file.path(dir,'Results', 'ExploreData_Results'))
 ## Extra functions
 ##-------------------------------------------------------
 # Multiple plot function
@@ -115,7 +116,10 @@ chns<-list(Host, Mox, Sox)
 
 # Plot venn diagram 
 venn<-venn.diagram(x = chns, category.names = c('Host','Mox','Sox'),filename = NULL, fill=c('skyblue', 'lightcoral','mediumseagreen'))
+
+pdf('metabolome_binning.pdf')
 grid.arrange(gTree(children=venn), ncol=1,newpage = T)
+dev.off()
 
 ## Get unique values per channel 
 metlist<-chns
@@ -127,7 +131,7 @@ s<-data.frame(mz=inters$Sox, label='sox')
 h<-data.frame(mz=inters$Host, label='host')
 c<-data.frame(mz=inters$`Host:Mox:Sox`, label='common')
 vlists<-rbind(m,s,h,c)
-write.csv(vlists, file='Results/VennDiagram-Seperated-Ion-List.csv')
+write.csv(vlists, file='VennDiagram-Seperated-Ion-List.csv')
 
 
 
@@ -144,7 +148,7 @@ plot(summary(pca.mod))
 
 ## Plot PCA scores across tissue section
 mycols<-gradient.colors(10,start='royalblue', end='goldenrod')
-pdf('Results/ExploreData_Results/PCA.pdf', height=12, width=18)
+pdf('PCA.pdf', height=12, width=18)
 par(mfrow=c(1,2))
 image(pca.mod, column=c('PC1','PC2'), superpose=F, col.regions=mycols)
 dev.off()
@@ -160,20 +164,13 @@ pca.scores<-rbind(pca.scores.green,pca.scores.red,pca.scores.tissue)
 pca.scores.symbionts<-pca.scores[pca.scores$Class %in% c('mox','sox'),]
 
 ggplot(pca.scores, aes(x=PC1, y=PC2, color=Class)) + geom_point() + geom_point(data=pca.scores.symbionts,aes( x=PC1, y=PC2, color=Class)) + theme_bw() + scale_color_manual(values=c('skyblue', 'lightcoral','mediumseagreen'))
-ggsave('Results/ExploreData_Results/PCA_scatter_PC1_PC2.eps')
+ggsave('PCA_scatter_PC1_PC2.eps')
 
 ggplot(pca.scores, aes(x=PC2, y=PC3, color=Class)) + geom_point() + geom_point(data=pca.scores.symbionts,aes( x=PC1, y=PC2, color=Class)) + theme_bw() + scale_color_manual(values=c('skyblue', 'lightcoral','mediumseagreen'))
-ggsave('Results/ExploreData_Results/PCA_scatter_PC3_PC2.eps')
+ggsave('PCA_scatter_PC3_PC2.eps')
 
 ggplot(pca.scores, aes(x=PC1, y=PC3, color=Class)) + geom_point() + geom_point(data=pca.scores.symbionts,aes( x=PC1, y=PC2, color=Class)) + theme_bw() + scale_color_manual(values=c('skyblue', 'lightcoral','mediumseagreen'))
-ggsave('Results/ExploreData_Results/PCA_scatter_PC1_PC3.eps')
-
-
-## PCA on Mox pixels
-
-## PCA on Host pixels 
-
-
+ggsave('PCA_scatter_PC1_PC3.eps')
 
 ##-------------------------------------------------------
 ## Volcano Plots
@@ -210,6 +207,7 @@ g1 <- ggplot(data=df.m, aes(x=log2(FC), y =-log10(padjust), colour=threshold)) +
   theme_bw() + scale_color_manual(values=c('gray', 'cornflowerblue')) + 
   theme(legend.position="none") + ggtitle(label = 'Host vs. Mox Volcano Plot')
 g1
+ggsave('Host vs. mox volcano plot.eps')
 
 
 ## Mox vs. Sox
@@ -241,6 +239,8 @@ g2 <- ggplot(data=df.m, aes(x=log2(FC), y =-log10(padjust), colour=threshold)) +
   theme_bw() + scale_color_manual(values=c('gray', 'cornflowerblue')) + 
   theme(legend.position="none") + ggtitle(label = 'Sox vs. Mox Volcano Plot')
 g2
+ggsave('Sox vs. mox volcano plot.eps')
+
 
 ## Sox vs. Host
 ## Fold Change B/A
@@ -272,15 +272,11 @@ g3 <- ggplot(data=df.m, aes(x=log2(FC), y =-log10(padjust), colour=threshold)) +
   theme_bw() + scale_color_manual(values=c('gray', 'cornflowerblue')) + 
   theme(legend.position="none") + ggtitle(label = 'Host vs. Sox Volcano Plot')
 g3
+ggsave('Host vs. sox volcano plot.eps')
+
 
 multiplot(g1,g2,g3, cols=3)
-
-
-## Plot means of specific Ions 
-df<-data.frame(host, mox, sox)
-barplot(as.matrix(met))
-
-
+ggsave('volcanoplots.eps')
 
 ##-------------------------------------------------------
 ## Cluster Results
@@ -294,8 +290,10 @@ summary(ssc.a)
 # All models converge on approximately 9-10 clusters describing the data-set. In order to retain as much information as possible, the model with r=1, k=20 and s=18 will be kept for down stream analysis. 
 mod<-list(r=1, k=10, s=12) ## Choose a model -- 10 groups, 124 features 
 
+pdf('cluster_analysis.pdf', height=10, width = 10)
 mycol<-c('olivedrab3', 'mediumslateblue','lightblue','coral4','darkslategray','mediumseagreen','darkgoldenrod','gray25','mediumblue',rep('gray',11))
 image(ssc.a, model=mod, col=mycol,strip=F)
+dev.off()
 
 ## Plot clusters independently 
 pdf('Cluster-Distribution-Plots.pdf', height=6, width=11)
@@ -328,11 +326,16 @@ tab$percent_of_group<-tab$Freq/total*100
 tab<-tab[!tab$Freq==0,]
 
 ggplot(tab, aes(x=as.factor(Var2), y=percent_of_group, fill=Var1)) + geom_bar(stat='identity', position='dodge')+ scale_fill_manual(values=c('gray80','black')) + ggtitle('% of all symbiont or host tissue identification signals across clusters') + ylab('% of  "FISH" Group') + xlab('Cluster Group') + guides(fill=guide_legend(title='FISH signal')) + theme_bw()
-##ggsave('../Results/Cluster Membership.eps')
-
-
+ggsave('Cluster_Membership.eps')
 
 ## _______________  Get Important Ions   _________________________
+
+tL<-topLabels(ssc.a, model=mod, n=10000) # just set a really high number
+tL.sig<-tL[which(tL$adj.p.values < 0.2),]
+dim(tL.sig)
+table(tL.sig$classes)
+write.csv(tL.sig, file='ssc-ions-clusterassignment.csv')
+
 
 ##_______________ Dendrogram of Clusters _________________________
 modResults<-ssc.a@resultData$`r = 2, k = 15, s = 18`
@@ -359,7 +362,7 @@ ggplot() + geom_segment(data = ddata$segments, aes(x = x, y = y, xend = xend, ye
   geom_text(data = ddata$labels, aes(x = x, y = y, label = label, size = 3, vjust = 0.5, hjust=-0.5)) + 
   geom_point(data=label(ddata), aes(x=x, y=y, color=as.factor(label),size=3),shape=15) + 
   theme_dendro() + scale_y_reverse() + coord_flip() + scale_color_manual(values=mycol)  + guides(color=F, size=F) 
-
+ggsave('Cluster_dendrogram_segmentationmap.eps')
 
 
 
