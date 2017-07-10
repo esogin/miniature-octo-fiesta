@@ -134,8 +134,6 @@ vlists<-rbind(m,s,h,c)
 write.csv(vlists, file='VennDiagram-Seperated-Ion-List.csv')
 
 
-
-
 ##-------------------------------------------------------
 ## PCA Analysis
 ##-------------------------------------------------------
@@ -288,16 +286,17 @@ plot(summary(ssc.a))
 summary(ssc.a)
 
 # All models converge on approximately 9-10 clusters describing the data-set. In order to retain as much information as possible, the model with r=1, k=20 and s=18 will be kept for down stream analysis. 
-mod<-list(r=1, k=10, s=12) ## Choose a model -- 10 groups, 124 features 
+mod<-list(r=2, k=10, s=18) ## Choose a model -- 10 groups, 124 features 
 
 pdf('cluster_analysis.pdf', height=10, width = 10)
 mycol<-c('olivedrab3', 'mediumslateblue','lightblue','coral4','darkslategray','mediumseagreen','darkgoldenrod','gray25','mediumblue',rep('gray',11))
-image(ssc.a, model=mod, col=mycol,strip=F)
+mycol<-c('olivedrab3', 'mediumslateblue','lightblue','coral4','darkslategray','mediumseagreen','darkgoldenrod',rep('gray',11))
+image(ssc.a, model=mod,col=mycol,strip=F)
 dev.off()
 
 ## Plot clusters independently 
 pdf('Cluster-Distribution-Plots.pdf', height=6, width=11)
-for (i in 1:9){
+for (i in 1:7){
   summaryPlots(maldifishmz,ssc.a,model=mod,segment=i, name='', col=mycol)
 }
 dev.off()
@@ -308,7 +307,7 @@ pDf<-data.frame(pData(maldifishmz))
 pDf$rowname<-rownames(pDf)
 
 ## Get cluster data plus coordinates
-cDf<-data.frame(Cluster=ssc.a$classes$`r = 1, k = 10, s = 12`)
+cDf<-data.frame(Cluster=ssc.a$classes$`r = 2, k = 10, s = 18`)
 cDf$rowname<-rownames(cDf)
 
 ## merge cluster annotations and pixel data
@@ -335,7 +334,6 @@ tL.sig<-tL[which(tL$adj.p.values < 0.2),]
 dim(tL.sig)
 table(tL.sig$classes)
 write.csv(tL.sig, file='ssc-ions-clusterassignment.csv')
-
 
 ##_______________ Dendrogram of Clusters _________________________
 modResults<-ssc.a@resultData$`r = 2, k = 15, s = 18`
@@ -366,6 +364,14 @@ ggsave('Cluster_dendrogram_segmentationmap.eps')
 
 
 
+
+
+
+
+##-------------------------------------------------------
+## Specific Ion Distributions
+##-------------------------------------------------------
+## Plot number of pixels per assignment for specific ions
 
 
 
