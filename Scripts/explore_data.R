@@ -19,7 +19,7 @@ library(dplyr)
 library(ggrepel)
 library(ggdendro)
 
-dir<-'/Users/esogin/Documents/Projects/maldifish/RAnalysis/'
+dir<-'~/Documents/Projects/maldifish/RAnalysis/'
 
 ## Import Data
 setwd(file.path(dir))
@@ -28,7 +28,7 @@ load('Results/cluster-analysis-final.RData')
 ls()
 maldifishmz ## Dimensions: 2322 peaks by 17,273 pixels
 
-setwd(file.path(dir,'Results', 'ExploreData_Results'))
+setwd(file.path(dir,'Results'))
 ## Extra functions
 ##-------------------------------------------------------
 # Multiple plot function
@@ -103,12 +103,14 @@ Host<-names(mz.means[which(mz.means > trsh)])
 channel<-'Mox'
 df<-int_matrix[which(int_matrix$Class==channel),]
 mz.means<-colMeans(df[,grep('m.z.', colnames(df))])
+summary(mz.means)
 Mox<-names(mz.means[which(mz.means > trsh)])
 
 # Sox
 channel<-'Sox'
 df<-int_matrix[which(int_matrix$Class==channel),]
 mz.means<-colMeans(df[,sapply(df,is.numeric)])
+summary(mz.means)
 Sox<-names(mz.means[which(mz.means > trsh)])
 
 # Combine channels into a list 
@@ -197,6 +199,8 @@ pvals$Metabolite<-rownames(pvals)
 df.m<-merge(pvals[,colnames(pvals) %in% c('Metabolite','padjust')], df, by='Metabolite')
 df.m$threshold <- as.factor(df.m$padjust < 0.05 & abs(log2(df.m$FC)) > 1)
 df.m$mz<-gsub('m.z...','',df.m$Metabolite)
+df.m.sig<-df.m[df.m$threshold==TRUE,]
+write.csv(df.m.sig, file='sig_features_volcano_host_mox.csv')
 
 ## Plot Volcano 
 g1 <- ggplot(data=df.m, aes(x=log2(FC), y =-log10(padjust), colour=threshold)) +geom_hline(yintercept = -log10(0.05), linetype=2, color='coral')+ geom_vline(xintercept = 0, linetype=2) + 
@@ -227,6 +231,8 @@ pvals$Metabolite<-rownames(pvals)
 df.m<-merge(pvals[,colnames(pvals) %in% c('Metabolite','padjust')], df, by='Metabolite')
 df.m$threshold <- as.factor(df.m$padjust < 0.05 & abs(log2(df.m$FC)) > 1)
 df.m$mz<-gsub('m.z...','',df.m$Metabolite)
+df.m.sig<-df.m[df.m$threshold==TRUE,]
+write.csv(df.m.sig, file='sig_features_volcano_mox_sox.csv')
 
 ## Remove Inf values because they are likley unrealistic
 #df.m<-df.m[!df.m$FC==Inf,]
@@ -259,6 +265,8 @@ pvals$Metabolite<-rownames(pvals)
 df.m<-merge(pvals[,colnames(pvals) %in% c('Metabolite','padjust')], df, by='Metabolite')
 df.m$threshold <- as.factor(df.m$padjust < 0.05 & abs(log2(df.m$FC)) > 1)
 df.m$mz<-gsub('m.z...','',df.m$Metabolite)
+df.m.sig<-df.m[df.m$threshold==TRUE,]
+write.csv(df.m.sig, file='sig_features_volcano_host_sox.csv')
 
 ## Remove Inf values because they are likley unrealistic
 ##df.m<-df.m[!df.m$FC==0,]
@@ -289,8 +297,8 @@ summary(ssc.a)
 mod<-list(r=2, k=10, s=18) ## Choose a model -- 10 groups, 124 features 
 
 pdf('cluster_analysis.pdf', height=10, width = 10)
-mycol<-c('olivedrab3', 'mediumslateblue','lightblue','coral4','darkslategray','mediumseagreen','darkgoldenrod','gray25','mediumblue',rep('gray',11))
-mycol<-c('olivedrab3', 'mediumslateblue','lightblue','coral4','darkslategray','mediumseagreen','darkgoldenrod',rep('gray',11))
+mycol<-c('olivedrab3', 'mediumslateblue','mediumblue','coral4','darkslategray','hotpink','mediumseagreen','darkgoldenrod','gray25','mediumblue',rep('gray',11))
+mycol<-c('olivedrab3','mediumblue','lightcyan3','indianred3','deepskyblue','hotpink','mediumseagreen',rep('gray',11))
 image(ssc.a, model=mod,col=mycol,strip=F)
 dev.off()
 
@@ -336,7 +344,7 @@ table(tL.sig$classes)
 write.csv(tL.sig, file='ssc-ions-clusterassignment.csv')
 
 ##_______________ Dendrogram of Clusters _________________________
-modResults<-ssc.a@resultData$`r = 2, k = 15, s = 18`
+modResults<-ssc.a@resultData$`r = 2, k = 10, s = 18`
 
 ## Add in cluster group to spectra information 
 maldifishmz$SSCA_Clusters_pixeln<-names(modResults$classes)
@@ -352,7 +360,7 @@ clusters<-hclust(d, method='average')
 plot(clusters,main='bray')
 
 dhc <- as.dendrogram(clusters)
-ddata <- dendro_data(dhc, type = "rectangle",)
+ddata <- dendro_data(dhc, type = "rectangle")
 ddata$labels$label<-as.numeric(gsub('ssca_cluster-',' ',ddata$labels$label))
 ddata$labels<-ddata$labels[order(ddata$labels$label),]
 
@@ -363,15 +371,6 @@ ggplot() + geom_segment(data = ddata$segments, aes(x = x, y = y, xend = xend, ye
 ggsave('Cluster_dendrogram_segmentationmap.eps')
 
 
-
-
-
-
-
-##-------------------------------------------------------
-## Specific Ion Distributions
-##-------------------------------------------------------
-## Plot number of pixels per assignment for specific ions
 
 
 
