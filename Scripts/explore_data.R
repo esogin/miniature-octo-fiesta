@@ -4,9 +4,6 @@
 
 ## Description: This script will import data processed by the data processing script, it will bin metabolomes based on FISH annotations, and it will run exploratory data analyses including PCA analysis and volcano plots
 
-## Need: (1) Decision on threshold for metabolome binning, how to decide what is noise and what is signal (mean column intensities per group, range is typically from very low to very high, median values aroun 8, mean values around 100)
-
-
 ##-------------------------------------------------------
 ## Set up working space
 rm(list=ls())
@@ -283,6 +280,35 @@ ggsave('Host vs. sox volcano plot.eps')
 
 multiplot(g1,g2,g3, cols=3)
 ggsave('volcanoplots.eps')
+
+## Significant Ion Comparison 
+sm<-read.csv('sig_features_volcano_mox_sox.csv')
+sh<-read.csv('sig_features_volcano_host_sox.csv')
+mh<-read.csv('sig_features_volcano_host_mox.csv')
+
+## specify if its sox, mox or host
+sh$cat<-ifelse(test=sh$FC < 1, yes='Host', no='sox')
+sm$cat<-ifelse(test=sm$FC < 1, yes='sox', no='mox')
+mh$cat<-ifelse(test=mh$FC < 1, yes='Host', no='mox')
+
+## create & compare vectors of significant ions in both anlayses for each channel 
+Host_sh<-sh[which(sh$cat=='Host'),]
+Host_mh<-mh[which(mh$cat=='Host'),]
+h_metabolites<-intersect(Host_mh$Metabolite, Host_sh$Metabolite)
+
+Sox_sh<-sh[which(sh$cat=='sox'),]
+Sox_sm<-sm[which(sm$cat=='sox'),]
+s_metabolites<-intersect(Sox_sh$Metabolite, Sox_sm$Metabolite)
+
+Mox_mh<-mh[which(mh$cat=='mox'),]
+Mox_sm<-sm[which(sm$cat=='mox'),]
+m_metabolites<-intersect(Mox_mh$Metabolite, Mox_sm$Metabolite)
+
+sig_across_channels<-data.frame(metabolites=c(s_metabolites, h_metabolites,m_metabolites), channel=rep(c('Sox','Host','Mox'), c(length(s_metabolites), length(h_metabolites),length(m_metabolites))))
+
+write.csv(sig_across_channels,'Significat_ions_compared_btw_chnls.csv')
+
+head(sh)
 
 ##-------------------------------------------------------
 ## Cluster Results
