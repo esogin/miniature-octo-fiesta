@@ -1,0 +1,339 @@
+---
+title: "Clustering Analysis"
+output:
+  html_document: default
+  html_notebook: default
+---
+
+#Date: "June 5 2017"
+
+
+
+# Clustering Analysis in Cardinal
+
+This analysis was preformed using a dataset without slide background information and done with a datamatrix of 2508 Peaks by 20920 Pixels. The tissue, sox and mox channels were determined through microscopy techniques and dimenions were reduced to match the maldi-msi dataset (done by Benedikt). Please see data processing and peak picking scripts to see how data dimensions were reduced. See data clustering script to determine how clusters were generated.
+
+Set up working space
+
+```{r}
+rm(list=ls())
+library(Cardinal)
+library(ggplot2)
+library(reshape2)
+library(vegan)
+library(ggdendro)
+load('../Results/cluster-analysis-final.RData') ##ssc clustering 
+load('../Results/Cardinal_Processed_Data.RData')
+```
+
+### Shrunken Centriods Clustering 
+
+From the cardinal workflows document: 
+
+"The spatial shrunken centroids clustering method for statistical analysis we introduce in Cardinal in the spatialShrunkenCentroids method. 
+
+The Gaussian and adaptive weights are retained from the spatially-aware k-means clustering [3]. In addition, we introduce statistical regularization as in nearest shrunken centroids to enforce feature sparsity [4]. This means doing feature selection, so that the analysis automatically identifies informative m/z values."
+
+
+```{r}
+plot(summary(ssc.a))
+summary(ssc.a)
+```
+
+We want to keep the shrinkage parameter as low as possible with getting the "best"" number of clusters
+
+```{r}
+mycol<-c('deeppink', 'mediumslateblue','lightblue','coral4','darkslategray','olivedrab3','mediumseagreen','darkgoldenrod','gray25','mediumblue',rep('gray',10))
+
+
+mod<-list(r=2, k=15, s=12) ## Choose a model -- 10 groups, 124 features 
+image(ssc.a, model=mod, col=mycol,strip=F)
+```
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+summaryPlots <- function(dataset, results, model, segment, name, col) {
+image(results, model = model, key = FALSE, column = segment, main = name,
+layout = c(3, 2), col = col)
+plot(results, model = model, key = FALSE, column = segment, mode = "centers",
+main = "Shrunken mean spectrum", col = col)
+plot(results, model = model, key = FALSE, column = segment, mode = "tstatistics",
+main = "Shrunken t-statistics", col = col)
+top <- topLabels(results, n = 3, model = model, filter = list(classes = segment))
+image(dataset, mz = top$mz, contrast.enhance = "histogram")
+ }
+```
+
+Plot each cluster group independently and choose top three ions that are part of that cluster
+ 
+```{r}
+pdf('Cluster-Distribution-Plots.pdf', height=6, width=11)
+ for (i in 1:10){
+   summaryPlots(maldifishmz,ssc.a,model=mod,segment=i, name='', col=mycol)
+ }
+dev.off()
+```
+
+Plot percentage of FISH signals in entire dataset across clusters. This will show us which clusters the percentange of the fish groups falls
+
+% of FISH signals across clusters 
+
+
+```{r}
+## Specify same dataset used in cluter analysis
+maldifishmz_3grps<-maldifishmz[,maldifishmz$Class %in% c('Tissue','Red','Green')]
+
+## Get pixel data 
+pDf<-data.frame(pData(maldifishmz_3grps))
+pDf$rowname<-rownames(pDf)
+
+## Get cluster data plus coordinates
+cDf<-data.frame(Cluster=ssc.a$classes$`r = 2, k = 15, s = 12`)
+cDf$rowname<-rownames(cDf)
+
+## merge cluster annotations and pixel data
+df.m<-merge(pDf, cDf, by = 'rowname')
+
+## Call all Red and Green annotations symbionts
+df.m[df.m$Class %in% c('Red','Green'),'Class']<-'Symbiont'
+
+## Class membership across clusters
+tab<-table(df.m$Class , df.m$Cluster)
+total<-rowSums(tab)
+tab<-data.frame(tab)
+tab$Total<-total
+tab$percent_of_group<-tab$Freq/total*100
+tab<-tab[!tab$Freq==0,]
+
+ggplot(tab, aes(x=as.factor(Var2), y=percent_of_group, fill=Var1)) + geom_bar(stat='identity', position='dodge')+ scale_fill_manual(values=c('gray80','black')) + ggtitle('% of all symbiont or host tissue identification signals across clusters') + ylab('% of  "FISH" Group') + xlab('Cluster Group') + guides(fill=guide_legend(title='FISH signal')) + theme_bw()
+ggsave('../Results/Cluster Membership.eps')
+```
+
+
+Write a datatable for the significant ions across clusters
+
+```{r}
+tL<-topLabels(ssc.a, model=mod, n=10000) # just set a really high number
+tL.sig<-tL[which(tL$adj.p.values < 0.2),]
+dim(tL.sig)
+table(tL.sig$classes)
+write.csv(tL.sig, file='../Results/ssc-ions-clusterassignment.csv')
+```
+
+
+One thing interesting, there doens't seem to be any ions seperating cluster 8 from the other clusters. 
+
+```{r}
+table(ssc.a$classes$`r = 2, k = 15, s = 12`)
+```
+
+Not that many pixels in cluster 8
+
+
+Make similar % cluster identity barplot for ions that are  of interest (i.e., significnat in seperating the groups)
+
+```{r}
+## select signficant ions  
+#tmp<-maldifishmz_3grps[mz(maldifishmz_3grps) %in% unique(tL.sig$mz),]
+tmp<-maldifishmz_3grps
+
+## Write out dataframe & add in class info
+mat<-spectra(tmp[,])
+rownames(mat)<-tmp@imageData@dimnames[[1]] ## gets rownames
+colnames(mat)<-tmp@imageData@dimnames[[2]]
+df.tmp<-as.data.frame(t(mat))
+df<-data.frame(Class=as.vector(tmp$Class),df.tmp)
+df$Class<-as.vector(df$Class)
+
+## Call all symbionts, symbionts
+#df[df$Class %in% c('Red','Green'),'Class']<-'Symbiont'
+ttls<-table(df$Class) ## totals
+
+## Create vector of significnat ions
+sigIons<-colnames(df[,grep('m.z',colnames(df))])
+
+## make a new dataframe
+okfor(i in 1:length(sigIons)){
+ind<-sigIons[i] ## select ion
+df.tmp<-data.frame(Class=df[,1],ion=df[,ind]) # create temp dataframe with ion of interest and fish calls
+rng<-range(df.tmp$ion)
+df.tmp<-df.tmp[df.tmp$ion > 0, ] # selects only pixels with values greater then 0
+prct<-table(df.tmp$Class)/ttls ## calculates percent of pixels with a positive m/z value in terms of group totals 
+prct_of_sgnls<-rbind(prct_of_sgnls,data.frame(mz=ind, sox_prct=as.vector(prct[1]), mox_prct=as.vector(prct[2]),host_prct=as.vector(prct[3]))) ## makes a handy dataframe
+}
+
+#prct_of_sgnls$diff<-abs(prct_of_sgnls$symbiont_prct - prct_of_sgnls$host_prct)
+#prct_of_sgnls<-prct_of_sgnls[order(prct_of_sgnls$diff, decreasing = T),]
+
+
+pdf('ion differences')
+cols<-colorRampPalette(c('black','blue','lightblue'))
+par(mfrow=c(1,2))
+mzval<-482.361
+image(maldifishmz_3grps,mz=mzval, col.regions=cols(50))
+temp<-prct_of_sgnls[grep(mzval,prct_of_sgnls$mz),2:4]
+vec<-as.matrix(temp)
+barplot(height=vec, main='% of FISHed cells with ion intensity > 0 ')
+
+
+cols<-colorRampPalette(c('black','blue','lightblue'))
+par(mfrow=c(1,2))
+mzval<-546.489 # hopanoid
+image(maldifishmz_3grps,mz=mzval, col.regions=cols(50))
+temp<-prct_of_sgnls[grep(mzval,prct_of_sgnls$mz),2:4]
+vec<-as.matrix(temp)
+barplot(height=vec, main='% of FISHed cells with ion intensity > 0 ')
+
+
+mzval<-562.483
+par(mfrow=c(1,2))
+image(maldifishmz_3grps,mz=mzval, col.regions=cols(50))
+temp<-prct_of_sgnls[grep(mzval,prct_of_sgnls$mz),2:4]
+vec<-as.matrix(temp)
+barplot(height=vec, main='% of FISHed cells with ion intensity > 0 ')
+
+
+mzval<-732.554
+par(mfrow=c(1,2))
+cols<-colorRampPalette(c('black','blue','lightblue'))
+image(maldifishmz_3grps,mz=mzval, col.regions=cols(50))
+temp<-prct_of_sgnls[grep(mzval,prct_of_sgnls$mz),2:4]
+vec<-as.matrix(temp)
+barplot(height=vec, main='% of FISHed cells with ion intensity > 0 ')
+
+
+mzval<-773.23
+par(mfrow=c(1,2))
+cols<-colorRampPalette(c('black','blue','lightblue'))
+image(maldifishmz_3grps,mz=mzval, col.regions=cols(50))
+temp<-prct_of_sgnls[grep(mzval,prct_of_sgnls$mz),2:4]
+vec<-as.matrix(temp)
+barplot(height=vec, main='% of FISHed cells with ion intensity > 0 ')
+
+
+mzval<-756.554
+par(mfrow=c(1,2))
+cols<-colorRampPalette(c('black','blue','lightblue'))
+image(maldifishmz_3grps,mz=mzval, col.regions=cols(50))
+temp<-prct_of_sgnls[grep(mzval,prct_of_sgnls$mz),2:4]
+vec<-as.matrix(temp)
+barplot(height=vec, main='% of FISHed cells with ion intensity > 0 ')
+
+dev.off()
+
+```
+
+
+
+
+
+
+#### Dendrogram of cluster groups
+ta
+```{r}
+modResults<-ssc.a@resultData$`r = 2, k = 15, s = 12`
+
+## Dataset that went into cluster analysis
+maldifishmz_3grps<-maldifishmz[,maldifishmz$Class %in% c('Tissue','Red','Green')]
+
+## Add in cluster group to spectra information 
+maldifishmz_3grps$SSCA_Clusters_pixeln<-names(modResults$classes)
+maldifishmz_3grps$SSCA_Clusters<-paste('ssca_cluster',modResults$classes,sep='-')
+
+
+## Get mean spectra for each group
+mean.sp<-data.frame(featureApply(maldifishmz_3grps, mean, .pixel.groups=maldifishmz_3grps$SSCA_Clusters))
+mean.sp[,1:10]
+mshapiro.test(U = as.matrix(mean.sp))
+
+## Run hclust 
+par(mfrow=c(2,2))
+d<-vegdist(mean.sp,method = 'euclidean')
+clusters<-hclust(d, method='average')
+plot(clusters, main='euclidean')
+
+d<-vegdist(mean.sp,method = 'bray')
+clusters<-hclust(d, method='average')
+plot(clusters,main='bray')
+
+d<-vegdist(mean.sp,method = 'mahalanobis')
+clusters<-hclust(d, method='average')
+plot(clusters,main='mahalanobis')
+
+d<-vegdist(mean.sp,method = 'manhattan')
+clusters<-hclust(d, method='average')
+plot(clusters,main='manhattan')
+
+
+## Use manhattan differences 
+d<-vegdist(mean.sp,method = 'manhattan')
+clusters<-hclust(d, method='average')
+plot(clusters,main='manhattan')
+
+```
+
+
+Make a nice plot for a figure
+```{r}
+dhc <- as.dendrogram(clusters)
+ddata <- dendro_data(dhc, type = "rectangle",)
+ddata$labels$label<-as.numeric(gsub('ssca_cluster-',' ',ddata$labels$label))
+ddata$labels<-ddata$labels[order(ddata$labels$label),]
+
+ggplot() + geom_segment(data = ddata$segments, aes(x = x, y = y, xend = xend, yend = yend)) + 
+            geom_text(data = ddata$labels, aes(x = x, y = y, label = label, size = 3, vjust = 0.5, hjust=-0.5)) + 
+            geom_point(data=label(ddata), aes(x=x, y=y, color=as.factor(label),size=3),shape=15) + 
+            theme_dendro() + scale_y_reverse() + coord_flip() + scale_color_manual(values=mycol)  + guides(color=F, size=F) 
+
+```
+
+
+
+
+
+### Supervised Shrunken Centriods Clustering 
+
+Creat a cross valiadation group
+```{r}
+maldifishmz$cvgroup<-cut(maldifishmz$y, breaks=5, labels = F) #based on y-location value in dataset
+```
+
+
+Add in cilliated edge pixels 
+
+```{r}
+grps<-ssc.a$classes$`r = 2, k = 15, s = 12`
+ciliatedgrps<-grps[which(grps==2)]
+grp1<-names(ciliatedgrps)
+msidata<-maldifishmz
+pData(msidata)[rownames(pData(msidata)) %in% grp1,'Class']<-'CiliatedEdge'
+table(msidata$Class, msidata$cvgroup)
+```
+
+Run spatial shrunken centriods supervised clustering using the adaptive method and the associated parameters
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+ssca.cv<-cvApply(msidata, .y=msidata$Class, .fun="spatialShrunkenCentroids",method='adaptive', .fold=cvgroup, r=c(1,2,3),s=c(0,1,3,6,12,24))
+plot(summary(ssca.cv))
+```
+
+```{r}
+ssca<-spatialShrunkenCentroids(x=msidata, y=msidata$Class, s=0, r=3)
+summary(ssca)
+ssca
+plot(ssca, mode='tstatistics')
+```
+```{r}
+image(ssca, model=list(r=3, s=0), col=c('midnightblue','mediumseagreen','lightcoral','skyblue'))
+```
+
+
+```{r}
+tp<-topLabels(ssca, n=20000)
+dim(tp)
+table(tp$classes)
+tp.sig<-tp[which(tp$adj.p.values < 0.2),]
+write.csv(tp.sig,file='../Results/ssc-classification-sigions.csv')
+```
+
+
+

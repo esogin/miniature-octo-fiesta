@@ -1,5 +1,5 @@
 # peak picking 
-# Description: Code to select peaks from maldifish data set. Must be preformed on high mem node to avoid crashing the machine. 
+# Description: Code to select peaks from maldifish data set. Must be performed on high mem node to avoid crashing the machine. 
 
 library(Cardinal)
 

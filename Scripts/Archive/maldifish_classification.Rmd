@@ -1,0 +1,239 @@
+---
+title: "Classification Analysis"
+output: html_notebook
+---
+
+Set up working space
+
+```{r, warning=FALSE}
+rm(list=ls())
+library(Cardinal)
+library(plyr); library(dplyr)
+library(ggplot2)
+library(randomForest)
+load('../Data/Cardinal_Processed_Data.RData')
+```
+
+
+From our exploratory analysis & clustering results, we know that we have another tissue category group called "cillated edge", for this analysis it is essential to provide an additional category to our class vector that denotes if a tissue group is the cilated edge. 
+
+Grab the clustering results data
+```{r}
+#load('../Results/HostSoxMox/unsupervised-clustering-analysis.RData') ## unsupervised clustering
+load('../Results/unsupervised-clustering-analysis.RData') ## unsupervised clustering
+image(skma, key = T, model=list(r=2, k=7))
+grps<-skma$cluster$`r = 2, k = 7`
+ciliatedgrps<-grps[which(grps==1)]
+grp1<-names(ciliatedgrps)
+
+msidata<-maldifishmz
+pData(msidata)[rownames(pData(msidata)) %in% grp1,'Class']<-'CiliatedEdge'
+```
+
+As a sanity check, make an msi data object without the cilated edge and use PCA to visualize vairation in data without this region 
+```{r}
+msidata.nce<-msidata[,msidata$Class %in% c('Red','Green','Tissue')] ## selects only for the red, green, tissue calls
+pca.nce<-PCA(msidata.nce,ncomp=2) ## preforms pca with 3 components
+plot(summary(pca.nce)) ## gives broken stick model
+image(pca.nce, column=c('PC1','PC2'), superpose=T) # plots PC scores across image
+```
+
+Need to make a cross validation group for all data by splitting along the Y axis 
+```{r}
+## Assign cross validation groups based on y-axis coordinates --> basically each filiament(?) will be it's own CV group more or less 
+msidata$CV<-cut(msidata$y, breaks=8, labels = F) # Lets stick with 10 CV groups
+
+## Visualize a few of the cuts (CV groups)
+msi1<-msidata[,msidata$CV %in% c(3,5,7)]
+pca.msi1<-PCA(msi1, ncomp=2)
+image(pca.msi1, superpose=T)
+```
+
+# Classification Analysis 
+The parameters from the models below are calculated from a portion of the data and compared across all models generated for each cross validation group. 
+
+These models are typically biased by varying group sizes. This can be solved by evening out the groups as below: 
+
+```{r}
+msidata<-msidata[,!msidata$Class %in% c('Mixed')] ## remve mixed category 
+table(msidata$Class, msidata$CV)
+
+temp<-data.frame(pData(msidata)) ## get pixel data out from object
+temp$xy<-paste(temp$x, temp$y,sep='-') ## get xy values to help insubsetting
+
+set.seed(1) #Always start in the same place
+subset<-data.frame((pData(msidata) %>% group_by(Class) %>% sample_n(size=700,replace = F))) ## randomly select 700 pixels for each group
+subset$xy<-paste(subset$x, subset$y,sep='-') # pixels select for anlaysis 
+
+coords<-rownames(temp[temp$xy %in% subset$xy,]) ## gets the pixels to keep
+msidata.subset<-msidata[,rownames(pData(msidata)) %in% coords] ## subsets data
+table(msidata.subset$Class, msidata.subset$CV) ## number of pixels across cv folds
+```
+
+Some inbalances across the individual folds, but should be OK
+
+### Full Model PLS Analysis 
+
+```{r, message=FALSE, warning=FALSE}
+set.seed(1)
+pls.cv<-cvApply(msidata.subset, .y = as.factor(msidata.subset$Class), .fun = "PLS", ncomp = 1:40, keep.Xnew = FALSE, .fold=CV)
+plot(summary(pls.cv))
+```
+
+```{r}
+set.seed(1)
+comp<-35
+pls<-PLS(x=msidata.subset,y=as.factor(msidata.subset$Class), ncomp=comp)
+summary(pls)
+```
+
+Visualize PCA Results 
+
+```{r}
+plot(pls,col=c('Purple','Green','Red','Cyan'))
+image(pls, model=list(ncomp=comp), col=c('Purple','Green','Red','Cyan'))
+```
+The way to interpert this, is we can predict the ciliated edge quite well with the data, the other categorys we are between 30 and 30 % of the time wrong with our prediction. 
+
+```{r}
+scores<-data.frame(pls$scores)
+colnames(scores)<-paste('Comp', 1:ncol(scores),sep='-')
+classes<-as.vector(pls$y)
+pls.scores<-data.frame(Classes=classes,scores)
+colnames(pls.scores)[1]<-'Classes'
+
+## Plot components 1 vs. the predictive component --35
+ggplot(pls.scores, aes(x=Comp.1, y=Comp.35, color=Classes)) + geom_point() + xlab('Component 1') + ylab('Component 35') + scale_color_manual(values=c('Purple','Green','Red','Cyan'))
+
+## plot component 1 vs. 2
+ggplot(pls.scores, aes(x=Comp.1, y=Comp.2, color=Classes)) + geom_point() + xlab('Component 1') + ylab('Component 2') + scale_color_manual(values=c('Purple','Green','Red','Cyan'))
+```
+
+It is clear the cilated edge is distinct from the tissue, but to confirm we can also build an OPLS-DA model with just the cilaited edge nad tissue pixels incorperated
+
+
+### Comparison between ciliated edge and tissue 
+
+Run an OPLS-Da model to compare ciliated edge host tissue pixels vs. normal tissue pixels 
+
+```{r}
+msidata.subset.ce<-msidata.subset[,which(msidata.subset$Class %in% c('CiliatedEdge','Tissue'))]
+table(msidata.subset.ce$Class)
+```
+
+```{r, message=FALSE, warning=FALSE}
+set.seed(1)
+msidata.subset.ce.cv<-cvApply(msidata.subset.ce, .y = as.factor(msidata.subset.ce$Class), .fun = "OPLS", ncomp = 1:20, keep.Xnew = FALSE, .fold=CV)
+plot(summary(msidata.subset.ce.cv))
+```
+
+```{r}
+comp<-1
+set.seed(1)
+opls<-OPLS(x=msidata.subset.ce,y=as.factor(msidata.subset.ce$Class), ncomp=comp)
+summary(opls)
+```
+Visualize results 
+```{r}
+image(opls, model=list(ncomp=comp))
+```
+
+```{r}
+scores<-data.frame(opls$scores)
+Oscores<-opls$Oscores
+classes<-as.vector(opls$y)
+opls.scores<-data.frame(Classes=classes,scores=scores, Oscores=Oscores)
+colnames(opls.scores)<-c('Classes', 'T1', 'TO')
+
+## Plot components 1 vs. the predictive component --35
+ggplot(opls.scores, aes(x=T1, y=TO, color=Classes)) + geom_point() + xlab('t[1]') + ylab('t[o]') + scale_color_manual(values=c('Purple','Green','Red','Cyan'))
+```
+
+Plot top ion distributions of compounds describing each class
+```{r, include=FALSE}
+TopIons <- function(dataset, results,n=3){
+  classes<-unique(results$classes[[1]])
+  for (i in 1:length(classes)){
+  top <- topLabels(results, n = 50)
+  top<-top[which(top$column==classes[i]),]
+  topn<-top[1:n,]
+  image(dataset, mz = topn$mz, normalize.image = "linear", contrast.enhance = "histogram",smooth.image = "adaptive", main=classes[i], layout=c(3,1))
+  }
+}
+```
+
+```{r}
+TopIons(maldifishmz,opls, n=9) ## using self-defined function
+```
+
+
+
+### Comparison between mox and host tissue 
+
+Remove ciliated edge tissues and compare only Tissue and Mox signals 
+
+```{r}
+msidata.subset.hm<-msidata.subset[,which(msidata.subset$Class %in% c('Tissue','Red'))]
+table(msidata.subset.hm$Class)
+```
+```{r, message=FALSE, warning=FALSE}
+set.seed(1)
+msidata.subset.hm.cv<-cvApply(msidata.subset.hm, .y = as.factor(msidata.subset.hm$Class), .fun = "OPLS", ncomp = 1:20, keep.Xnew = FALSE, .fold=CV)
+plot(summary(msidata.subset.hm.cv))
+```
+
+```{r}
+comp<-3
+opls<-OPLS(x=msidata.subset.hm,y=as.factor(msidata.subset.hm$Class), ncomp=comp)
+summary(opls)
+```
+Model results aren't significant (neither are the other comparisons)
+
+One possibility: Preform random forest classification method on data to see if we can seperate host from mox. 
+
+```{r}
+## Run random corest on one fold 
+msidata.subset.cv<-msidata.subset[,msidata.subset.hm$CV %in% c(4, 6)]
+table(msidata.subset.cv$Class)
+df<-spectra(msidata.subset.cv)[,]
+rownames(df)<-msidata.subset.cv@imageData@dimnames[[1]] ## gets rownames
+colnames(df)<-msidata.subset.cv@imageData@dimnames[[2]]
+df.t<-as.data.frame(t(df))
+int_matrix<-data.frame(Class=msidata.subset.cv$Class,df.t)
+
+Y<-int_matrix$Class
+X<-df.t
+forest<-randomForest(x = X, y=Y, ntree = 1000)
+forest
+```
+
+We are pretty good are predicting the ciliated edge (error rate of 3%) and of the Sox tissues (which I am assuming is a collective symbiont group)
+
+Now if we combine the symbionts and call them symbionts can random forest predict us our categories?
+```{r}
+## Run random corest on one fold 
+msidata.subset.cv<-msidata.subset[,msidata.subset.hm$CV %in% c(4, 6)]
+table(msidata.subset.cv$Class)
+msidata.subset.cv$Class[msidata.subset.cv$Class %in% c('Green','Red')]<-'Symbiont'
+
+df<-spectra(msidata.subset.cv)[,]
+rownames(df)<-msidata.subset.cv@imageData@dimnames[[1]] ## gets rownames
+colnames(df)<-msidata.subset.cv@imageData@dimnames[[2]]
+df.t<-as.data.frame(t(df))
+int_matrix<-data.frame(Class=msidata.subset.cv$Class,df.t)
+
+Y<-int_matrix$Class
+X<-df.t
+forest<-randomForest(x = X, y=Y, ntree = 1000)
+forest
+```
+So we can predict the ciliated edge
+
+We can predict the symbiont 
+
+But the tissue is also predicted as the symbiont :( --> I am guessing the signal of the tissue is just too much like the symbiont. One other thing I would like to try again is to use the classification analysis but use the dapi-signal as a predictor because then we would really know if the tissue is tissue and not symbiont (or symbiont digestion???).
+
+
+
+
+## END

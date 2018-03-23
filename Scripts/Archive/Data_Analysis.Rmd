@@ -1,0 +1,614 @@
+---
+title: "Data Analysis"
+output:
+  html_document: default
+  html_notebook: default
+---
+
+# Description of Goals  
+
+We aim to use the maldifish appraoch to determine if mass spectral data classify according to symbiont/host tissue locations using both a spatial clustering framework and the discriminate analysis appraoch. Maldi data was peak-picked using PeakPicking.R script and processed to reduce dimensions (Data_Processing.R). Additionally, cluster analysis was preformed on the high-memory node in Cologne and resulting cluster data is in associated R Files. This script depends on the following RData Files : *Cardinal_Processed_Data.RData*, *supervised-clustering-anlaysis.RData*, *unspervised-clustering-anlaysis.RData*
+
+
+Set up working space 
+
+```{r, warning=FALSE}
+rm(list=ls())
+library(Cardinal)
+library(VennDiagram)
+library(ggplot2)
+library(plyr)
+library(dplyr)
+dir<-"/home/maggie/Documents/Projects/maldifish/RAnalysis"
+setwd(file.path(dir,'Data'))
+load('Cardinal_Processed_Data.RData')
+```
+
+Add in a cross validation group for classification
+```{r}
+pixelNo<-nrow(pData(maldifishmz))
+randNum<-sample(1:10,size = pixelNo,replace = T) ## For now, just split the data 10 ways, increase to see how changes in overnight run
+pData(maldifishmz)$cvgroup<-as.vector(randNum)
+```
+
+# FISH BINNING OF METABLOMES
+
+
+# EXPLORATORY VISUALIZATION 
+
+First preform PCA with cardinal package 
+
+```{r}
+pca.mod<-PCA(maldifishmz,ncomp=4)
+summary(pca.mod)
+plot(summary(pca.mod))
+```
+
+Visualize PCA analysis 
+
+```{r}
+mycols<-gradient.colors(10,start='Blue', end='Red')
+image(pca.mod, column=c('PC1','PC2','PC3'), superpose=F, col.regions=mycols)
+image(pca.mod, column=c('PC1','PC2','PC3'), superpose=T, col.regions=mycols)
+```
+We can see clear seperation in the data based on PC components 1 and 2. We can also plot these points as "normal" score plots below colored by FISH annotation
+
+```{r}
+## Set up data for plotting
+pca.scores.red<-as.data.frame(pca.mod[[1]]$scores[maldifishmz$Class=='Red',])
+pca.scores.red$Class<-'mox'
+
+pca.scores.green<-as.data.frame(pca.mod[[1]]$scores[maldifishmz$Class=='Green',],Class='sox')
+pca.scores.green$Class<-'sox'
+
+pca.scores.tissue<-as.data.frame(pca.mod[[1]]$scores[maldifishmz$Class=='Tissue',],Class='host')
+pca.scores.tissue$Class<-'host'
+
+pca.scores.mixed<-as.data.frame(pca.mod[[1]]$scores[maldifishmz$Class=='Mixed',],Class='mixed')
+pca.scores.mixed$Class<-'sox&mox'
+
+pca.scores<-rbind(pca.scores.green,pca.scores.mixed,pca.scores.red,pca.scores.tissue)
+pca.scores.reduced<-pca.scores[seq(1,nrow(pca.scores),15),]
+ggplot(pca.scores.reduced, aes(x=PC1, y=PC2, color=Class)) + geom_point(alpha=0.5) + ggtitle('Plotting every 15th Pixel') ## Now plotting every 20 pixels or so to see distrubution of points 
+
+pca.scores.symbionts<-pca.scores[pca.scores$Class %in% c('mox','sox','mixed'),]
+ggplot(pca.scores, aes(x=PC1, y=PC2, color=Class)) + geom_point(alpha=0.5) + geom_point(data=pca.scores.symbionts,aes( x=PC1, y=PC2, color=Class))
+```
+
+
+Clearly there is a large variation in the host tissue. Just to confirm, re-run PCA with just host pixels 
+
+```{r}
+maldifishmz.host<-maldifishmz[,maldifishmz$Class=='Tissue']
+pca.mod.2<-PCA(maldifishmz.host,ncomp=3)
+image(pca.mod.2, column=c('PC1','PC2','PC3'), superpose=F, col.regions=mycols)
+
+pca.scores.red<-as.data.frame(pca.mod.2[[1]]$scores)
+ggplot(pca.scores, aes(x=PC1, y=PC2)) + geom_point(alpha=0.5) 
+```
+
+
+
+
+
+# CLUSTERING ANALYSIS
+
+To confirm observation that ciliated edge host pixels cluster independently of the tissue pixels in the symbiont region, we can visualize the unsupervised clustering of the comlete dataset using spatially aware k-means clustering method.
+
+Load in clustering data
+```{r, warning=FALSE}
+setwd(file.path(dir,'Results'))
+load('unsupervised-clustering-anlaysis.RData')
+ls()
+```
+
+### Unsupervized
+
+```{r}
+print('adaptive')
+summary(skma)
+image(skma, key = T, layout = c(3, 2))
+```
+
+```{r}
+print('gaussian')
+summary(skmg)
+image(skmg, key = T, layout = c(3,2))
+```
+
+
+In all cases, the ciliated edge clusters indepenentdely from the other tissue portions. Additionally, it looks like the adaptive and bausian methods preform about the same.
+
+
+### Supervised
+
+In this analysis a supervised method was used to cluster the dataset into groups (n=4) based on our classification calles through the FISH data.
+
+Load in data
+```{r, warning=FALSE}
+setwd(file.path(dir,'Results'))
+load('supervised-clustering-anlaysis.RData')
+ls()
+```
+
+Summarize the supervised clustering analysis for both gaussian and adaptive methods
+
+Gaussian
+```{r}
+plot(summary(sscg.cv))
+```
+
+Adaptive 
+```{r}
+plot(summary(ssca.cv))
+```
+No difference bewteen the different radius adn the hitest accuracy value is at s=5, slightly more accuate for the adaptive method. 
+
+Plots the calls for the different cross validation groups for the adaptive method
+```{r}
+image(ssca.cv, model=list(r=1, s=5))
+```
+
+These are the t-stats for the differnet ions that lead to differences between groups
+
+```{r}
+ssc<-spatialShrunkenCentroids(maldifishmz,y=as.factor(maldifishmz$Class), r=3, s=5,method='adaptive')
+plot(ssc, mode='tstatistics', model=list(r=3, s=5))
+```
+
+
+Summerize results here
+```{r}
+summary(ssc)
+sigIons<-topLabels(ssc, n=90)
+sigIons<-sigIons[order(sigIons$mz),]
+sigIons
+```
+
+
+Looks like we can accurately predict the mox signals from the tissue signals, but definitely can't classify out the mixed signals (we do get some significant ions for the sox)
+Maybe worth repeating by taking out the mixed signal and running more cvs and potentially adding in a category for the ciliated edge tissue sections
+
+# DISCRIMINATE ANALYSIS 
+
+Next steps: Res-assign class groups by calling pixels from ciliated edge, cilated (in the clustering analysis this correpsonds to cluster group 1) & run OPLS-DA 
+
+```{r}
+clust.groups<-skma$cluster$`r = 2, k = 7`
+group1<-clust.groups[which(clust.groups==1)]
+grp1<-names(group1)
+
+msidata<-maldifishmz
+pData(msidata)[rownames(pData(msidata)) %in% grp1,'Class']<-'CiliatedEdge'
+
+msidata.nociliatededge<-msidata[,msidata$Class %in% c('Red','Green','Tissue')]
+pca.nociliated<-PCA(msidata.nociliatededge,ncomp=3)
+plot(summary(pca.nociliated))
+image(pca.nociliated, column=c('PC1','PC2'), superpose=T)
+```
+
+
+Comparing ciliated edge vs. tissue
+```{r}
+ciliatedEdge<-msidata[,msidata$Class %in% c('CiliatedEdge', 'Tissue')]
+table(ciliatedEdge$Class)
+
+ddd<-data.frame(pData(ciliatedEdge))
+ddd$xy<-paste(ddd$x, ddd$y,sep='-')
+
+subset<-data.frame((pData(ciliatedEdge) %>% group_by(Class) %>% sample_n(size=1000,replace = F)))
+subset$xy<-paste(subset$x, subset$y,sep='-')
+
+dnew<-ddd[ddd$xy %in% subset$xy,]
+coordsSubset<-rownames(dnew)
+
+ciliatedEdge.subset<-ciliatedEdge[,rownames(pData(ciliatedEdge)) %in% coordsSubset]
+ciliatedEdge.subset
+table(ciliatedEdge.subset$Class)
+
+pixelNo<-nrow(pData(ciliatedEdge.subset))
+randNum<-sample(1:10,size = pixelNo,replace = T) ## For now, just split the data 10 ways, increase to see how changes in overnight run
+pData(ciliatedEdge.subset)$cvgroup<-as.vector(randNum)
+```
+
+OPLS
+```{r}
+ciliated.opls.cv<-cvApply(ciliatedEdge.subset, .y = as.factor(ciliatedEdge.subset$Class), .fun = "OPLS", ncomp = 1:12, keep.Xnew = FALSE, .fold=cvgroup)
+plot(summary(ciliated.opls.cv))
+```
+
+Re-run opls with correct number of components as predicted from model above and visualize
+```{r}
+comp<-7
+ciliated.opls<-OPLS(x=ciliatedEdge.subset,y=as.factor(ciliatedEdge.subset$Class), ncomp=comp)
+summary(ciliated.opls)
+plot(ciliated.opls)
+topLabels(ciliated.opls, n=50)
+image(ciliated.opls, model=list(ncomp=comp))
+scores<-ciliated.opls@resultData$`ncomp = 7`
+opls.scores<-data.frame(t0=scores$Oscores, t1=scores$scores, Class=scores$classes)
+ggplot(opls.scores, aes(x=C1, y=t0.C4, color=Class)) + geom_point() + xlab('t[1]') + ylab('t[0]')
+```
+
+Conclusions: There are clear differences in the metabolome between the tissue pixels and the ciliated edge pixels. This is intriguing because it suggests that either the host is somehow controlling the symbiont assemablges at the cilaited edge of the tissue through secretion of interesting metabololites (check annotations) or  the symbionts are some how re-modeling the tissue structures inside the host tissue. Could be a nice interesting comparison of how hosts are different with bacteria and without. 
+
+Either way, we will need to keep the ciliated edge pixels out of the complete analysis. 
+
+### OPLS Analysis with Ciliated Edge Category 
+
+```{r}
+msidata<-msidata[,!msidata$Class %in% c('Mixed')]
+table(msidata$Class)
+
+ddd<-data.frame(pData(msidata))
+ddd$xy<-paste(ddd$x, ddd$y,sep='-')
+
+subset<-data.frame((pData(msidata) %>% group_by(Class) %>% sample_n(size=700,replace = F)))
+subset$xy<-paste(subset$x, subset$y,sep='-')
+
+dnew<-ddd[ddd$xy %in% subset$xy,]
+coordsSubset<-rownames(dnew)
+
+msidata.subset<-msidata[,rownames(pData(msidata)) %in% coordsSubset]
+msidata.subset
+table(msidata.subset$Class)
+
+pixelNo<-nrow(pData(msidata.subset))
+randNum<-sample(1:10,size = pixelNo,replace = T) ## For now, just split the data 10 ways, increase to see how changes in overnight run
+pData(msidata.subset)$cvgroup<-as.vector(randNum)
+```
+
+OPLS cv analysis 
+```{r, message=FALSE, warning=FALSE}
+pls.cv<-cvApply(msidata.subset, .y = as.factor(msidata.subset$Class), .fun = "PLS", ncomp = 1:25, keep.Xnew = FALSE, .fold=cvgroup)
+plot(summary(pls.cv))
+```
+
+Visualization 
+```{r}
+comp<-20
+pls<-PLS(x=msidata.subset,y=as.factor(msidata.subset$Class), ncomp=comp)
+summary(pls)
+
+plot(pls)
+topLabels(pls, n=50)
+image(pls, model=list(ncomp=comp))
+
+scores<-pls@resultData$`ncomp = 20`$scores
+classes<-pls@resultData$`ncomp = 20`$y
+pls.scores<-data.frame(scores, Classes=classes)
+ggplot(pls.scores, aes(x=C1, y=C2, color=Classes)) + geom_point() 
+ggplot(pls.scores, aes(x=C1, y=C3, color=Classes)) + geom_point() 
+ggplot(pls.scores, aes(x=C2, y=C3, color=Classes)) + geom_point() 
+ggplot(pls.scores, aes(x=C1, y=C20, color=Classes)) + geom_point() 
+```
+
+
+## No Ciliated Edge Pixels 
+Three comparisons pairwise comparisons  
+host vs. mox
+host vs. sox
+sox vs. mox
+
+## PLS
+
+```{r}
+table(msidata.nociliatededge$Class)
+ddd<-data.frame(pData(msidata.nociliatededge))
+ddd$xy<-paste(ddd$x, ddd$y,sep='-')
+
+subset<-data.frame((pData(msidata.nociliatededge) %>% group_by(Class) %>% sample_n(size=700,replace = F)))
+subset$xy<-paste(subset$x, subset$y,sep='-')
+
+dnew<-ddd[ddd$xy %in% subset$xy,]
+coordsSubset<-rownames(dnew)
+
+nce.subset<-msidata.nociliatededge[,rownames(pData(msidata.nociliatededge)) %in% coordsSubset]
+nce.subset
+table(nce.subset$Class)
+
+## Assign numbers for CV groups
+pixelNo<-nrow(pData(nce.subset))
+randNum<-sample(1:10,size = pixelNo,replace = T) ## For now, just split the data 10 ways, increase to see how changes in overnight run
+pData(nce.subset)$cvgroup<-as.vector(randNum)
+```
+
+ 
+```{r, message=FALSE, warning=FALSE}
+nce.pls.cv<-cvApply(nce.subset, .y = as.factor(nce.subset$Class), .fun = "PLS", ncomp = 1:12, keep.Xnew = FALSE, .fold=cvgroup)
+plot(summary(nce.pls.cv))
+```
+
+
+```{r}
+comp<-3
+nce.pls<-PLS(x=nce.subset,y=as.factor(nce.subset$Class), ncomp=comp)
+summary(nce.pls)
+
+plot(nce.pls)
+topLabels(nce.pls, n=50)
+image(nce.pls, model=list(ncomp=comp))
+
+scores<-nce.pls@resultData$`ncomp = 3`$scores
+classes<-nce.pls@resultData$`ncomp = 3`$y
+pls.scores<-data.frame(scores, Classes=classes)
+ggplot(pls.scores, aes(x=C1, y=C2, color=Classes)) + geom_point() 
+ggplot(pls.scores, aes(x=C1, y=C3, color=Classes)) + geom_point() 
+```
+No predictive power for red green tissue siganls with OPLS 
+
+### OPLS
+#### Host vs. mox
+
+```{r}
+hostmox<-msidata.nociliatededge[,msidata.nociliatededge$Class %in% c('Red','Tissue')]
+table(hostmox$Class)
+
+ddd<-data.frame(pData(hostmox))
+ddd$xy<-paste(ddd$x, ddd$y,sep='-')
+
+subset<-data.frame((pData(hostmox) %>% group_by(Class) %>% sample_n(size=700,replace = F)))
+subset$xy<-paste(subset$x, subset$y,sep='-')
+
+dnew<-ddd[ddd$xy %in% subset$xy,]
+coordsSubset<-rownames(dnew)
+
+hostmox.subset<-hostmox[,rownames(pData(hostmox)) %in% coordsSubset]
+table(hostmox.subset$Class)
+
+## Assign numbers for CV groups
+pixelNo<-nrow(pData(hostmox.subset))
+randNum<-sample(1:10,size = pixelNo,replace = T) ## For now, just split the data 10 ways, increase to see how changes in overnight run
+pData(hostmox.subset)$cvgroup<-as.vector(randNum)
+```
+
+Preform opls cross validation to select best model representation 
+```{r, message=FALSE}
+hostmox.opls.cv<-cvApply(hostmox.subset, .y = as.factor(hostmox.subset$Class), .fun = "OPLS", ncomp = 1:12, keep.Xnew = FALSE, .fold=cvgroup)
+plot(summary(hostmox.opls.cv))
+```
+
+
+Re-run opls on all the data & visualize
+
+```{r}
+comp<-3
+hostmox.opls<-OPLS(x=hostmox.subset,y=as.factor(hostmox.subset$Class), ncomp=comp)
+summary(hostmox.opls)
+plot(hostmox.opls)
+topLabels(hostmox.opls, n=50)
+image(hostmox.opls, model=list(ncomp=comp))
+scores<-hostmox.opls@resultData$`ncomp = 3`
+opls.scores<-data.frame(t0=scores$Oscores, t1=scores$scores, Class=scores$classes)
+ggplot(opls.scores, aes(x=C1, y=t0.C3, color=Class)) + geom_point() + xlab('t[1]') + ylab('t[0]')
+```
+
+Still not a significant modeling attempt (fdr > 0.05)
+
+
+#### Host vs. sox
+```{r}
+hostsox<-msidata.nociliatededge[,msidata.nociliatededge$Class %in% c('Green','Tissue')]
+table(hostsox$Class)
+
+ddd<-data.frame(pData(hostsox))
+ddd$xy<-paste(ddd$x, ddd$y,sep='-')
+
+subset<-data.frame((pData(hostsox) %>% group_by(Class) %>% sample_n(size=700,replace = F)))
+subset$xy<-paste(subset$x, subset$y,sep='-')
+
+dnew<-ddd[ddd$xy %in% subset$xy,]
+coordsSubset<-rownames(dnew)
+
+hostsox.subset<-hostsox[,rownames(pData(hostsox)) %in% coordsSubset]
+table(hostsox.subset$Class)
+
+## Assign numbers for CV groups
+pixelNo<-nrow(pData(hostsox.subset))
+randNum<-sample(1:10,size = pixelNo,replace = T) ## For now, just split the data 10 ways, increase to see how changes in overnight run
+pData(hostsox.subset)$cvgroup<-as.vector(randNum)
+```
+
+```{r, message=FALSE}
+hostsox.subset.cv<-cvApply(hostsox.subset, .y = as.factor(hostsox.subset$Class), .fun = "OPLS", ncomp = 1:12, keep.Xnew = FALSE, .fold=cvgroup)
+plot(summary(hostsox.subset.cv))
+```
+
+```{r}
+comp<-1
+hostsox.opls<-OPLS(x=hostsox.subset,y=as.factor(hostsox.subset$Class), ncomp=comp)
+summary(hostsox.opls)
+plot(hostsox.opls)
+topLabels(hostsox.opls, n=50)
+image(hostsox.opls, model=list(ncomp=comp))
+scores<-hostsox.opls@resultData$`ncomp = 1`
+opls.scores<-data.frame(t0=scores$Oscores, t1=scores$scores, Class=scores$classes)
+#ggplot(opls.scores, aes(x=C1, y=t0.C1, color=Class)) + geom_point() + xlab('t[1]') + ylab('t[0]')
+```
+
+Not a predtive model with OPLS (no t-orthoganal scores calculated )
+
+#### sox vs. mox 
+
+```{r}
+moxsox<-msidata.nociliatededge[,msidata.nociliatededge$Class %in% c('Green','Red')]
+table(moxsox$Class)
+
+ddd<-data.frame(pData(moxsox))
+ddd$xy<-paste(ddd$x, ddd$y,sep='-')
+
+subset<-data.frame((pData(moxsox) %>% group_by(Class) %>% sample_n(size=700,replace = F)))
+subset$xy<-paste(subset$x, subset$y,sep='-')
+
+dnew<-ddd[ddd$xy %in% subset$xy,]
+coordsSubset<-rownames(dnew)
+
+moxsox.subset<-moxsox[,rownames(pData(moxsox)) %in% coordsSubset]
+table(moxsox.subset$Class)
+
+## Assign numbers for CV groups
+pixelNo<-nrow(pData(moxsox.subset))
+randNum<-sample(1:10,size = pixelNo,replace = T) ## For now, just split the data 10 ways, increase to see how changes in overnight run
+pData(moxsox.subset)$cvgroup<-as.vector(randNum)
+```
+
+```{r, message=FALSE}
+moxsox.subset.cv<-cvApply(moxsox.subset, .y = as.factor(moxsox.subset$Class), .fun = "OPLS", ncomp = 1:12, keep.Xnew = FALSE, .fold=cvgroup)
+plot(summary(moxsox.subset.cv))
+```
+
+```{r}
+comp<-1
+moxsox.opls<-OPLS(x=moxsox.subset,y=as.factor(moxsox.subset$Class), ncomp=comp)
+summary(moxsox.opls)
+plot(moxsox.opls)
+topLabels(moxsox.opls, n=50)
+image(moxsox.opls, model=list(ncomp=comp))
+scores<-moxsox.opls@resultData$`ncomp = 1`
+opls.scores<-data.frame(t0=scores$Oscores, t1=scores$scores, Class=scores$classes)
+#ggplot(opls.scores, aes(x=C1, y=t0.C1, color=Class)) + geom_point() + xlab('t[1]') + ylab('t[0]')
+```
+Also not a preditive model -- no t-orthoganol scores 
+
+
+One other possibility that would be good to consider is that the spatial variation may alter the structure of the dataset 
+
+
+## Split Dataset by spatial coordinates 
+
+Image compelete maldifishmz dataset
+```{r}
+image(skma, key = T, layout = c(1,1))
+```
+
+
+Take region between x=100 and 200
+
+```{r}
+p<-pData(maldifishmz)[(pData(maldifishmz)$x > 100 & pData(maldifishmz)$x < 200 ),]
+msi<-maldifishmz[,rownames(pData(maldifishmz)) %in% rownames(p)]
+
+## Assign cross validation groups based on y-coordinates (1-50, 50-100,100-150,150-200)
+msi$CV<-cut(msi$y, breaks=10, labels = F)
+
+## Visualize two of the cuts
+msi1<-msi[,msi$CV %in% c(1,2)]
+pca.msi1<-PCA(msi1, ncomp=1:2)
+image(pca.msi1, superpose=T)
+```
+
+#### Run discriminate analysis bewteen host and mox signals 
+
+```{r, message=FALSE, warning=FALSE}
+hostmox<-msi[,msi$Class %in% c('Red','Tissue')]
+table(hostmox$Class)
+
+ddd<-data.frame(pData(hostmox))
+ddd$xy<-paste(ddd$x, ddd$y,sep='-')
+
+subset<-data.frame((pData(hostmox) %>% group_by(Class) %>% sample_n(size=400,replace = F)))
+subset$xy<-paste(subset$x, subset$y,sep='-')
+
+dnew<-ddd[ddd$xy %in% subset$xy,]
+coordsSubset<-rownames(dnew)
+
+hostmox.subset<-hostmox[,rownames(pData(hostmox)) %in% coordsSubset]
+table(hostmox.subset$Class)
+
+hostmox.cv<-cvApply(hostmox.subset, .y = as.factor(hostmox.subset$Class), .fun = "OPLS", ncomp = 1:12, keep.Xnew = FALSE, .fold=CV)
+plot(summary(hostmox.cv))
+```
+
+```{r}
+comp<-9
+opls<-OPLS(x=hostmox.subset,y=as.factor(hostmox.subset$Class), ncomp=comp)
+summary(opls)
+image(opls, model=list(ncomp=comp))
+
+scores<-opls@resultData$`ncomp = 9`
+opls.scores<-data.frame(t0=scores$Oscores, t1=scores$scores, Class=scores$classes)
+ggplot(opls.scores, aes(x=C1, y=t0.C1, color=Class)) + geom_point() + xlab('t[1]') + ylab('t[0]')
+```
+ But the FDR is too high --> not sure how to overcome this despite being able to build a model
+
+
+
+
+#### host vs sox
+
+```{r, message=FALSE, warning=FALSE}
+hostsox<-msi[,msi$Class %in% c('Green','Tissue')]
+table(hostsox$Class)
+
+ddd<-data.frame(pData(hostsox))
+ddd$xy<-paste(ddd$x, ddd$y,sep='-')
+
+subset<-data.frame((pData(hostsox) %>% group_by(Class) %>% sample_n(size=400,replace = F)))
+subset$xy<-paste(subset$x, subset$y,sep='-')
+
+dnew<-ddd[ddd$xy %in% subset$xy,]
+coordsSubset<-rownames(dnew)
+
+hostsox.subset<-hostsox[,rownames(pData(hostsox)) %in% coordsSubset]
+table(hostsox.subset$Class)
+
+hostsox.cv<-cvApply(hostsox.subset, .y = as.factor(hostsox.subset$Class), .fun = "OPLS", ncomp = 1:12, keep.Xnew = FALSE, .fold=CV)
+plot(summary(hostsox.cv))
+```
+
+```{r}
+comp<-1
+opls<-OPLS(x=hostsox.subset,y=as.factor(hostsox.subset$Class), ncomp=comp)
+summary(opls)
+image(opls, model=list(ncomp=comp))
+
+scores<-opls@resultData$`ncomp = 1`
+opls.scores<-data.frame(t0=scores$Oscores, t1=scores$scores, Class=scores$classes)
+#ggplot(opls.scores, aes(x=C1, y=t0.C1, color=Class)) + geom_point() + xlab('t[1]') + ylab('t[0]')
+```
+
+
+#### Sox vs. Mox
+```{r, message=FALSE, warning=FALSE}
+moxsox<-msi[,msi$Class %in% c('Green','Red')]
+table(moxsox$Class)
+
+ddd<-data.frame(pData(moxsox))
+ddd$xy<-paste(ddd$x, ddd$y,sep='-')
+
+subset<-data.frame((pData(moxsox) %>% group_by(Class) %>% sample_n(size=400,replace = F)))
+subset$xy<-paste(subset$x, subset$y,sep='-')
+
+dnew<-ddd[ddd$xy %in% subset$xy,]
+coordsSubset<-rownames(dnew)
+
+moxsox.subset<-moxsox[,rownames(pData(moxsox)) %in% coordsSubset]
+table(moxsox.subset$Class)
+
+moxsox.cv<-cvApply(moxsox.subset, .y = as.factor(moxsox.subset$Class), .fun = "OPLS", ncomp = 1:12, keep.Xnew = FALSE, .fold=CV)
+plot(summary(moxsox.cv))
+```
+
+```{r}
+comp<-1
+opls<-OPLS(x=moxsox.subset,y=as.factor(moxsox.subset$Class), ncomp=comp)
+summary(opls)
+image(opls, model=list(ncomp=comp))
+
+scores<-opls@resultData$`ncomp = 1`
+opls.scores<-data.frame(t0=scores$Oscores, t1=scores$scores, Class=scores$classes)
+#ggplot(opls.scores, aes(x=C1, y=t0.C1, color=Class)) + geom_point() + xlab('t[1]') + ylab('t[0]')
+```
+
+# Ion Distrubtion Plots 
+
+```{r}
+image(maldifishmz, mz=869.537,plusminus=0.5)
+```
+
+
+
+
+
+
+

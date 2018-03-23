@@ -1,6 +1,5 @@
 ## Explore Data
 ## EM SOGIN 
-## June 17, 2017
 
 ## Description: This script will import data processed by the data processing script, it will bin metabolomes based on FISH annotations, and it will run exploratory data analyses including PCA analysis and volcano plots
 
@@ -335,40 +334,6 @@ for (i in 1:7){
 }
 dev.off()
 
-##_______________   Relate to FISH Data  _________________________
-## Get pixel data 
-pDf<-data.frame(pData(maldifishmz))
-pDf$rowname<-rownames(pDf)
-
-## Get cluster data plus coordinates
-cDf<-data.frame(Cluster=ssc.a$classes$`r = 2, k = 10, s = 18`)
-cDf$rowname<-rownames(cDf)
-
-## merge cluster annotations and pixel data
-df.m<-merge(pDf, cDf, by = 'rowname')
-
-## Call all Red and Green annotations symbionts
-df.m[df.m$Class %in% c('Mox','Sox','Mixed'),'Class']<-'Symbiont'
-
-## Class membership across clusters
-tab<-table(df.m$Class , df.m$Cluster)
-total<-rowSums(tab)
-tab<-data.frame(tab)
-tab$Total<-total
-tab$percent_of_group<-tab$Freq/total*100
-tab<-tab[!tab$Freq==0,]
-
-ggplot(tab, aes(x=as.factor(Var2), y=percent_of_group, fill=Var1)) + geom_bar(stat='identity', position='dodge')+ scale_fill_manual(values=c('gray80','black')) + ggtitle('% of all symbiont or host tissue identification signals across clusters') + ylab('% of  "FISH" Group') + xlab('Cluster Group') + guides(fill=guide_legend(title='FISH signal')) + theme_bw()
-ggsave('Cluster_Membership.eps')
-
-## _______________  Get Important Ions   _________________________
-
-tL<-topLabels(ssc.a, model=mod, n=10000) # just set a really high number
-tL.sig<-tL[which(tL$adj.p.values < 0.2),]
-dim(tL.sig)
-table(tL.sig$classes)
-write.csv(tL.sig, file='ssc-ions-clusterassignment.csv')
-
 ##_______________ Dendrogram of Clusters _________________________
 modResults<-ssc.a@resultData$`r = 2, k = 10, s = 18`
 
@@ -396,6 +361,58 @@ ggplot() + geom_segment(data = ddata$segments, aes(x = x, y = y, xend = xend, ye
   theme_dendro() + scale_y_reverse() + coord_flip() + scale_color_manual(values=mycol)  + guides(color=F, size=F) 
 ggsave('Cluster_dendrogram_segmentationmap.eps')
 
+
+##_______________   Relate to FISH Data  _________________________
+## Get pixel data 
+pDf<-data.frame(pData(maldifishmz))
+pDf$rowname<-rownames(pDf)
+
+## Get cluster data plus coordinates
+cDf<-data.frame(Cluster=ssc.a$classes$`r = 2, k = 10, s = 18`)
+cDf$rowname<-rownames(cDf)
+
+## merge cluster annotations and pixel data
+df.m<-merge(pDf, cDf, by = 'rowname')
+
+## Call all Red and Green annotations symbionts
+df.m[df.m$Class %in% c('Mox','Sox','Mixed'),'Class']<-'Symbiont'
+
+
+## Class membership across clusters
+tab<-table(df.m$Class , df.m$Cluster)
+
+## Get Symbiont ratio per cluster group 
+sym.ratio<-t(tab)
+
+sr<-data.frame(host=sym.ratio[,1], symbiont=sym.ratio[,2], Cluster=rownames(sym.ratio))
+sr$ratio_s_to_h<-sr$symbiont/sr$host
+sr
+setwd(file.path(dir,'Results'))
+write.csv(sr, 'Symbiont_to_host_ratio.csv')
+
+total<-rowSums(tab)
+tab<-data.frame(tab)
+tab$Total<-total
+
+tab$percent_of_group<-tab$Freq/total*100
+tab<-tab[!tab$Freq==0,]
+tab$Var2<-factor(tab$Var2, levels=c(3,6,4,1,5,2,7))
+
+head(tab)
+
+
+
+
+ggplot(tab, aes(x=as.factor(Var2), y=percent_of_group, fill=Var1)) + geom_bar(stat='identity', position='dodge')+ scale_fill_manual(values=c('gray80','black')) + ggtitle('% of all symbiont or host tissue identification signals across clusters') + ylab('% of  "FISH" Group') + xlab('Cluster Group') + guides(fill=guide_legend(title='FISH signal')) + theme_bw() + coord_flip()
+ggsave('Cluster_Membership.eps')
+
+## _______________  Get Important Ions   _________________________
+
+tL<-topLabels(ssc.a, model=mod, n=10000) # just set a really high number
+tL.sig<-tL[which(tL$adj.p.values < 0.2),]
+dim(tL.sig)
+table(tL.sig$classes)
+write.csv(tL.sig, file='ssc-ions-clusterassignment.csv')
 
 
 
